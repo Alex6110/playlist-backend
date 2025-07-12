@@ -4,7 +4,7 @@ from collections import defaultdict
 
 # === CONFIG ===
 SONGS_FILE = "songs.json"
-PLAYLIST_FILE = "playlist_auto.json"
+PLAYLIST_FOLDER = "playlist_utenti"  # una cartella per contenere le playlist per utente
 
 # === UTILS ===
 def normalize_artist(artist_name):
@@ -37,7 +37,8 @@ def get_period_label(year):
     else:
         return "Anni 2020"
 
-def main():
+# === FUNZIONE PRINCIPALE ===
+def genera_playlist_per_utente(user_id):
     if not os.path.exists(SONGS_FILE):
         print(f"❌ File '{SONGS_FILE}' non trovato.")
         return []
@@ -45,6 +46,7 @@ def main():
     with open(SONGS_FILE, "r", encoding="utf-8") as f:
         songs = json.load(f)
 
+    # 🔁 FUTURO: filtra canzoni ascoltate da questo utente, per ora usa tutte
     playlist_map = defaultdict(list)
 
     for song in songs:
@@ -69,8 +71,16 @@ def main():
                 "tracks": files
             })
 
-    with open(PLAYLIST_FILE, "w", encoding="utf-8") as f:
+    # 📁 Salva in file separati per utente
+    os.makedirs(PLAYLIST_FOLDER, exist_ok=True)
+    user_playlist_path = os.path.join(PLAYLIST_FOLDER, f"{user_id}.json")
+
+    with open(user_playlist_path, "w", encoding="utf-8") as f:
         json.dump(playlist_output, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Playlist generate: {len(playlist_output)} - salvate in '{PLAYLIST_FILE}'")
+    print(f"✅ Playlist per '{user_id}' salvate in '{user_playlist_path}'")
     return playlist_output
+
+# === DEFAULT ===
+def main():
+    return genera_playlist_per_utente("default")
