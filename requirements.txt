@@ -3,3 +3,5 @@ flask
 gunicorn
 
 flask-cors
+
+Pillow

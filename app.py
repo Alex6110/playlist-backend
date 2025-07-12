@@ -3,6 +3,7 @@ import os
 import json
 import genera_playlist_auto
 from flask_cors import CORS
+from flask import send_from_directory
 
 app = Flask(__name__)
 CORS(app)
@@ -66,3 +67,7 @@ def playlist_personalizzata(user_id):
 def generate_playlist_utente(user_id):
     genera_playlist_auto.genera_playlist_per_utente(user_id)
     return jsonify({"status": f"🎯 Playlist generate per {user_id}"})
+
+@app.route("/cover/<user_id>/<filename>")
+def serve_cover(user_id, filename):
+    return send_from_directory("playlist_utenti/covers", f"{user_id}_{filename}")
