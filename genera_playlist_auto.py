@@ -7,7 +7,7 @@ from PIL import Image
 
 # === CONFIG ===
 SONGS_FILE = "songs.json"
-PLAYLIST_FOLDER = "playlist_utenti"  # una cartella per contenere le playlist per utente
+PLAYLIST_FOLDER = "playlist_utenti"  # cartella per playlist utente
 
 # === UTILS ===
 def normalize_artist(artist_name):
@@ -39,9 +39,6 @@ def get_period_label(year):
         return "Anni 2010"
     else:
         return "Anni 2020"
-
-def clean_title(title):
-    return re.sub(r'^\d+\s*[\.-]?\s*', '', title).strip()
 
 def smart_shuffle(songs):
     if not songs:
@@ -109,11 +106,9 @@ def genera_playlist_per_utente(user_id):
     for name, files in playlist_map.items():
         if len(files) >= 3:
             tracks = [s for s in songs if s["file"] in files]
-
-            for t in tracks:
-                t["title"] = clean_title(t["title"])
-
             shuffled = smart_shuffle(tracks.copy())
+
+            # Genera cover dinamica
             cover_name = f"{user_id}_{name.replace(':', '_').replace(' ', '_')}.jpg"
             cover_path = f"{PLAYLIST_FOLDER}/covers/{cover_name}"
             cover = create_playlist_cover(shuffled, cover_path)
@@ -121,10 +116,11 @@ def genera_playlist_per_utente(user_id):
             playlist_output.append({
                 "name": name,
                 "description": f"Playlist generata automaticamente: {name}",
-                "tracks": shuffled,
+                "tracks": [s["file"] for s in shuffled],  # ✅ SOLO path, non oggetti completi
                 "cover": f"/cover/{user_id}/{cover_name}" if os.path.exists(cover_path) else ""
             })
 
+    # ✅ Salva su file
     user_playlist_path = os.path.join(PLAYLIST_FOLDER, f"{user_id}.json")
     with open(user_playlist_path, "w", encoding="utf-8") as f:
         json.dump(playlist_output, f, indent=2, ensure_ascii=False)
