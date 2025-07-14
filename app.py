@@ -36,6 +36,7 @@ def log_ascolto():
     data = request.json
     user_id = data.get("userId")
     song_file = data.get("songFile")
+    artist = data.get("artist")
     timestamp = data.get("timestamp", "")
 
     if not user_id or not song_file:
@@ -49,7 +50,11 @@ def log_ascolto():
         with open(ascolti_path, "r") as f:
             ascolti = json.load(f)
 
-    ascolti.append({"songFile": song_file, "timestamp": timestamp})
+    ascolti.append({
+    "songFile": song_file,
+    "artist": artist,
+    "timestamp": timestamp
+    })
     with open(ascolti_path, "w") as f:
         json.dump(ascolti, f, indent=2)
 
