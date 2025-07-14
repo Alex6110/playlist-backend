@@ -4,6 +4,10 @@ import json
 import genera_playlist_auto
 from flask_cors import CORS
 from flask import send_from_directory
+import requests
+
+SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
 
 app = Flask(__name__)
 CORS(app)
@@ -71,3 +75,78 @@ def generate_playlist_utente(user_id):
 @app.route("/cover/<user_id>/<filename>")
 def serve_cover(user_id, filename):
     return send_from_directory("playlist_utenti/covers", f"{user_id}_{filename}")
+
+def get_spotify_token():
+    res = requests.post(
+        "https://accounts.spotify.com/api/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": SPOTIFY_CLIENT_ID,
+            "client_secret": SPOTIFY_CLIENT_SECRET
+        }
+    )
+    return res.json().get("access_token")
+
+def search_artist_id(name, token):
+    r = requests.get(
+        "https://api.spotify.com/v1/search",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"q": name, "type": "artist", "limit": 1}
+    )
+    items = r.json().get("artists", {}).get("items", [])
+    return items[0]["id"] if items else None
+
+def get_related_artists(artist_id, token):
+    url = f"https://api.spotify.com/v1/artists/{artist_id}/related-artists"
+    r = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+    return [
+        {
+            "name": a["name"],
+            "image": a["images"][0]["url"] if a.get("images") else "img/note.jpg"
+        }
+        for a in r.json().get("artists", [])[:5]
+    ]
+
+@app.route("/suggestions/<user_id>")
+def suggerimenti_per_utente(user_id):
+    ascolti_path = f"ascolti/{user_id}.json"
+    if not os.path.exists(ascolti_path):
+        return jsonify([])
+
+    with open(ascolti_path) as f:
+        ascolti = json.load(f)
+
+    # Prendi solo gli ultimi 20 ascolti unici
+    artisti = []
+    seen = set()
+    for entry in reversed(ascolti):
+        song_file = entry.get("songFile", "")
+        # Estrai artista dal path, es: "canzoni/Artista/Album/brano.mp3"
+        parts = song_file.split("/")
+        if len(parts) >= 2:
+            artist = parts[1]
+            if artist not in seen:
+                artisti.append(artist)
+                seen.add(artist)
+        if len(artisti) >= 5:
+            break
+
+    token = get_spotify_token()
+    suggeriti = []
+    visti = set()
+
+    for artista in artisti:
+        artist_id = search_artist_id(artista, token)
+        if not artist_id:
+            continue
+        related = get_related_artists(artist_id, token)
+        for a in related:
+            if a["name"] not in artisti and a["name"] not in visti:
+                suggeriti.append(a)
+                visti.add(a["name"])
+            if len(suggeriti) >= 10:
+                break
+        if len(suggeriti) >= 10:
+            break
+
+    return jsonify(suggeriti)
