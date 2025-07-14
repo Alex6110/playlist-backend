@@ -82,6 +82,10 @@ def serve_cover(user_id, filename):
     return send_from_directory("playlist_utenti/covers", f"{user_id}_{filename}")
 
 def get_spotify_token():
+    if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
+        print("❌ Variabili SPOTIFY_CLIENT_ID o SPOTIFY_CLIENT_SECRET mancanti")
+        return None
+
     res = requests.post(
         "https://accounts.spotify.com/api/token",
         data={
@@ -90,7 +94,14 @@ def get_spotify_token():
             "client_secret": SPOTIFY_CLIENT_SECRET
         }
     )
-    return res.json().get("access_token")
+
+    if res.status_code != 200:
+        print("❌ Errore richiesta token:", res.status_code, res.text)
+        return None
+
+    token = res.json().get("access_token")
+    print("🎫 Token ottenuto correttamente")
+    return token
 
 def search_artist_id(name, token):
     r = requests.get(
