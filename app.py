@@ -104,13 +104,26 @@ def get_spotify_token():
     return token
 
 def search_artist_id(name, token):
+    print(f"🎯 Cerco artista su Spotify: {name}")
     r = requests.get(
         "https://api.spotify.com/v1/search",
         headers={"Authorization": f"Bearer {token}"},
         params={"q": name, "type": "artist", "limit": 1}
     )
-    items = r.json().get("artists", {}).get("items", [])
-    return items[0]["id"] if items else None
+    
+    if r.status_code != 200:
+        print("❌ Errore nella ricerca artista:", r.status_code, r.text)
+        return None
+
+    result = r.json()
+    items = result.get("artists", {}).get("items", [])
+    
+    if not items:
+        print("⚠️ Nessun risultato trovato per:", name)
+        return None
+
+    print("✅ Artista trovato:", items[0]["name"], "| ID:", items[0]["id"])
+    return items[0]["id"]
 
 def get_related_artists(artist_id, token):
     url = f"https://api.spotify.com/v1/artists/{artist_id}/related-artists"
