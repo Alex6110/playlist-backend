@@ -125,14 +125,10 @@ def suggerimenti_per_utente(user_id):
     artisti = []
     seen = set()
     for entry in reversed(ascolti):
-        song_file = entry.get("songFile", "")
-        # Estrai artista dal path, es: "canzoni/Artista/Album/brano.mp3"
-        parts = song_file.split("/")
-        if len(parts) >= 2:
-            artist = parts[1]
-            if artist not in seen:
-                artisti.append(artist)
-                seen.add(artist)
+        artist = entry.get("artist")
+        if artist and artist not in seen:
+            artisti.append(artist)
+            seen.add(artist)
         if len(artisti) >= 5:
             break
 
