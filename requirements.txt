@@ -5,3 +5,7 @@ gunicorn
 flask-cors
 
 Pillow
+
+requests
+
+
