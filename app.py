@@ -150,3 +150,14 @@ def suggerimenti_per_utente(user_id):
             break
 
     return jsonify(suggeriti)
+
+
+@app.route("/debug/ascolti/<user_id>")
+def debug_ascolti(user_id):
+    path = f"ascolti/{user_id}.json"
+    if not os.path.exists(path):
+        return jsonify({"status": "❌ File non trovato"}), 404
+
+    with open(path) as f:
+        data = json.load(f)
+    return jsonify(data)
