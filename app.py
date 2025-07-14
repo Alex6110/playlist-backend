@@ -146,6 +146,8 @@ def suggerimenti_per_utente(user_id):
     print("🎧 Artisti ascoltati di recente:", artisti)
 
     token = get_spotify_token()
+    if not token:
+        return jsonify({"error": "❌ Impossibile ottenere token Spotify"}), 500
     print("🎫 Token Spotify:", token[:10], "...")  # stampa solo le prime cifre
 
     suggeriti = []
