@@ -115,12 +115,16 @@ def search_artist_id(name, token):
 def get_related_artists(artist_id, token):
     url = f"https://api.spotify.com/v1/artists/{artist_id}/related-artists"
     r = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+    related = r.json().get("artists", [])
+
+    print(f"📡 Risposta raw da Spotify (related-artists): {len(related)} artisti trovati")
+
     return [
         {
-            "name": a["name"],
-            "image": a["images"][0]["url"] if a.get("images") else "img/note.jpg"
+            "name": a.get("name"),
+            "image": a["images"][0]["url"] if a.get("images") and len(a["images"]) > 0 else "img/note.jpg"
         }
-        for a in r.json().get("artists", [])[:5]
+        for a in related
     ]
 
 @app.route("/suggestions/<user_id>")
