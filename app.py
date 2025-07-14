@@ -116,12 +116,12 @@ def get_related_artists(artist_id, token):
 def suggerimenti_per_utente(user_id):
     ascolti_path = f"ascolti/{user_id}.json"
     if not os.path.exists(ascolti_path):
+        print(f"📁 File ascolti non trovato: {ascolti_path}")
         return jsonify([])
 
     with open(ascolti_path) as f:
         ascolti = json.load(f)
 
-    # Prendi solo gli ultimi 20 ascolti unici
     artisti = []
     seen = set()
     for entry in reversed(ascolti):
@@ -132,24 +132,36 @@ def suggerimenti_per_utente(user_id):
         if len(artisti) >= 5:
             break
 
+    print("🎧 Artisti ascoltati di recente:", artisti)
+
     token = get_spotify_token()
+    print("🎫 Token Spotify:", token[:10], "...")  # stampa solo le prime cifre
+
     suggeriti = []
     visti = set()
 
     for artista in artisti:
+        print(f"🔍 Cerco artista: {artista}")
         artist_id = search_artist_id(artista, token)
+        print("🆔 ID trovato:", artist_id)
+
         if not artist_id:
             continue
+
         related = get_related_artists(artist_id, token)
+        print(f"🎯 Artisti correlati a {artista}: {[a['name'] for a in related]}")
+
         for a in related:
             if a["name"] not in artisti and a["name"] not in visti:
                 suggeriti.append(a)
                 visti.add(a["name"])
             if len(suggeriti) >= 10:
                 break
+
         if len(suggeriti) >= 10:
             break
 
+    print("✅ Suggeriti finali:", [s["name"] for s in suggeriti])
     return jsonify(suggeriti)
 
 
