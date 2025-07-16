@@ -14,6 +14,10 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 app = Flask(__name__)
 CORS(app)
 
+# 🔧 Crea le cartelle mancanti all'avvio
+os.makedirs("ascolti", exist_ok=True)
+os.makedirs("suggestions_cache", exist_ok=True)
+
 @app.route("/")
 def home():
     return "🎶 Playlist Backend attivo!"
