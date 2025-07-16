@@ -312,21 +312,26 @@ def refresh_suggestions_all():
         print("❌ Cartella ascolti non trovata")
         return jsonify({"error": "❌ Cartella ascolti non trovata"}), 404
 
-    for filename in os.listdir(users_path):
-        print(f"➡️ Analizzo file: {filename}")
-        if filename.endswith(".json"):
-            user_id = filename.replace(".json", "")
-            try:
-                url = f"https://playlist-backend-97qc.onrender.com/suggestions-by-artist/{user_id}"
-                r = requests.get(url)
-                print(f"🟢 Richiesta per {user_id}: {r.status_code}")
-                if r.status_code == 200:
-                    results[user_id] = "✅ aggiornato"
-                else:
-                    results[user_id] = f"❌ {r.status_code}"
-            except Exception as e:
-                print(f"⚠️ Errore per {user_id}: {str(e)}")
-                results[user_id] = f"❌ {str(e)}"
+    try:
+        for filename in os.listdir(users_path):
+            print(f"➡️ Analizzo file: {filename}")
+            if filename.endswith(".json"):
+                user_id = filename.replace(".json", "")
+                try:
+                    url = f"https://playlist-backend-97qc.onrender.com/suggestions-by-artist/{user_id}"
+                    r = requests.get(url)
+                    print(f"🟢 Richiesta per {user_id}: {r.status_code}")
+                    if r.status_code == 200:
+                        results[user_id] = "✅ aggiornato"
+                    else:
+                        results[user_id] = f"❌ {r.status_code}"
+                except Exception as e:
+                    print(f"⚠️ Errore per {user_id}: {str(e)}")
+                    results[user_id] = f"❌ {str(e)}"
 
-    print("✅ Risultato finale:", results)
-    return jsonify(results)
+        print("✅ Risultato finale:", results)
+        return jsonify(results)
+    
+    except Exception as main_err:
+        print("🔥 ERRORE INTERNO NEL REFRESH:", str(main_err))
+        return jsonify({"error": str(main_err)}), 500
