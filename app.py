@@ -322,20 +322,24 @@ def refresh_suggestions_all():
             if filename.endswith(".json"):
                 user_id = filename.replace(".json", "")
                 try:
-                    url = f"https://playlist-backend-97qc.onrender.com/suggestions-by-artist/{user_id}"
-                    r = requests.get(url)
-                    print(f"🟢 Richiesta per {user_id}: {r.status_code}")
-                    if r.status_code == 200:
-                        results[user_id] = "✅ aggiornato"
-                    else:
-                        results[user_id] = f"❌ {r.status_code}"
+                    # 👉 Chiamata interna senza HTTP
+                    with app.test_request_context():
+                        res = suggerimenti_per_artista(user_id)
+                        if isinstance(res, tuple):
+                            status_code = res[1]
+                        else:
+                            status_code = 200
+                        if status_code == 200:
+                            results[user_id] = "✅ aggiornato"
+                        else:
+                            results[user_id] = f"❌ {status_code}"
                 except Exception as e:
                     print(f"⚠️ Errore per {user_id}: {str(e)}")
                     results[user_id] = f"❌ {str(e)}"
 
         print("✅ Risultato finale:", results)
         return jsonify(results)
-    
+
     except Exception as main_err:
         print("🔥 ERRORE INTERNO NEL REFRESH:", str(main_err))
         return jsonify({"error": str(main_err)}), 500
