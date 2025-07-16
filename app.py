@@ -3,6 +3,8 @@ import os
 import json
 import genera_playlist_auto
 import requests
+from datetime import datetime, timedelta
+import random
 from flask_cors import CORS
 
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
@@ -155,6 +157,29 @@ def get_lastfm_similar_artists(artist_name):
         print("⚠️ Errore Last.fm:", e)
         return []
 
+def salva_cache(user_id, artist_name, suggestions):
+    os.makedirs(f"suggestions_cache/{user_id}", exist_ok=True)
+    with open(f"suggestions_cache/{user_id}/{artist_name}.json", "w") as f:
+        json.dump({
+            "updated": datetime.utcnow().isoformat(),
+            "suggestions": suggestions
+        }, f, indent=2)
+
+def carica_cache(user_id, artist_name):
+    path = f"suggestions_cache/{user_id}/{artist_name}.json"
+    if not os.path.exists(path):
+        return None
+
+    with open(path) as f:
+        data = json.load(f)
+
+    updated = datetime.fromisoformat(data.get("updated"))
+    if datetime.utcnow() - updated > timedelta(days=7):
+        return None  # cache scaduta
+
+    return data.get("suggestions", [])
+
+
 @app.route("/suggestions/<user_id>")
 def suggerimenti_per_utente(user_id):
     ascolti_path = f"ascolti/{user_id}.json"
@@ -213,3 +238,89 @@ def debug_ascolti(user_id):
     with open(path) as f:
         data = json.load(f)
     return jsonify(data)
+
+@app.route("/suggestions-by-artist/<user_id>")
+def suggerimenti_per_artista(user_id):
+    ascolti_path = f"ascolti/{user_id}.json"
+    if not os.path.exists(ascolti_path):
+        return jsonify({})
+
+    with open(ascolti_path) as f:
+        ascolti = json.load(f)
+
+    artisti = []
+    seen = set()
+    for entry in reversed(ascolti):
+        artist = entry.get("artist")
+        if artist and artist not in seen:
+            artisti.append(artist)
+            seen.add(artist)
+        if len(artisti) >= 3:
+            break
+
+    token = get_spotify_token()
+    suggerimenti = {}
+    visti = set()
+
+    for artista in artisti:
+        cached = carica_cache(user_id, artista)
+        if cached:
+            random.shuffle(cached)
+            blocco = [a for a in cached if a["name"] not in visti][:8]
+            for s in blocco:
+                visti.add(s["name"])
+            suggerimenti[artista] = blocco
+            continue
+
+        suggeriti_artist = []
+
+        # Spotify
+        if token:
+            artist_id = search_artist_id(artista, token)
+            if artist_id:
+                suggeriti_artist = get_related_artists(artist_id, token)
+
+        # Last.fm fallback
+        if not suggeriti_artist or len(suggeriti_artist) < 3:
+            suggeriti_artist = get_lastfm_similar_artists(artista)
+
+        nomi_unici = []
+        visti_locale = set()
+        for s in suggeriti_artist:
+            if s["name"] not in visti and s["name"] not in visti_locale:
+                nomi_unici.append(s)
+                visti_locale.add(s["name"])
+            if len(nomi_unici) >= 8:
+                break
+
+        if nomi_unici:
+            suggerimenti[artista] = nomi_unici
+            for s in nomi_unici:
+                visti.add(s["name"])
+            salva_cache(user_id, artista, suggeriti_artist)  # salva cache completa
+
+    print("✅ Suggerimenti organizzati per artista (con caching):", list(suggerimenti.keys()))
+    return jsonify(suggerimenti)
+
+@app.route("/refresh_suggestions", methods=["POST"])
+def refresh_suggestions_all():
+    users_path = "ascolti"
+    results = {}
+
+    if not os.path.exists(users_path):
+        return jsonify({"error": "❌ Cartella ascolti non trovata"}), 404
+
+    for filename in os.listdir(users_path):
+        if filename.endswith(".json"):
+            user_id = filename.replace(".json", "")
+            try:
+                url = f"https://playlist-backend-97qc.onrender.com/suggestions-by-artist/{user_id}"
+                r = requests.get(url)
+                if r.status_code == 200:
+                    results[user_id] = "✅ aggiornato"
+                else:
+                    results[user_id] = f"❌ {r.status_code}"
+            except Exception as e:
+                results[user_id] = f"❌ {str(e)}"
+
+    return jsonify(results)
