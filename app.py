@@ -252,21 +252,23 @@ def suggerimenti_per_artista(user_id):
     with open(ascolti_path) as f:
         ascolti = json.load(f)
 
-    artisti = []
-    seen = set()
-    for entry in reversed(ascolti):
+    # ✅ Estrai artisti ordinati per frequenza (più ascoltati prima)
+    artist_count = {}
+    for entry in ascolti:
         artist = entry.get("artist")
-        if artist and artist not in seen:
-            artisti.append(artist)
-            seen.add(artist)
-        if len(artisti) >= 3:
-            break
+        if artist:
+            artist_count[artist] = artist_count.get(artist, 0) + 1
+
+    artisti = sorted(artist_count, key=artist_count.get, reverse=True)
 
     token = get_spotify_token()
     suggerimenti = {}
     visti = set()
 
     for artista in artisti:
+        if len(suggerimenti) >= 3:
+            break
+
         cached = carica_cache(user_id, artista)
         if cached:
             random.shuffle(cached)
@@ -278,13 +280,11 @@ def suggerimenti_per_artista(user_id):
 
         suggeriti_artist = []
 
-        # Spotify
         if token:
             artist_id = search_artist_id(artista, token)
             if artist_id:
                 suggeriti_artist = get_related_artists(artist_id, token)
 
-        # Last.fm fallback
         if not suggeriti_artist or len(suggeriti_artist) < 3:
             suggeriti_artist = get_lastfm_similar_artists(artista)
 
@@ -301,7 +301,7 @@ def suggerimenti_per_artista(user_id):
             suggerimenti[artista] = nomi_unici
             for s in nomi_unici:
                 visti.add(s["name"])
-            salva_cache(user_id, artista, suggeriti_artist)  # salva cache completa
+            salva_cache(user_id, artista, suggeriti_artist)
 
     print("✅ Suggerimenti organizzati per artista (con caching):", list(suggerimenti.keys()))
     return jsonify(suggerimenti)
