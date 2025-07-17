@@ -3,7 +3,7 @@ import os
 import json
 import genera_playlist_auto
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -384,7 +384,8 @@ def aggiorna_suggerimenti(user_id):
         print(f"❌ Errore Supabase per {user_id}: {e}")
         return {"error": str(e)}, 500
 
-    now = datetime.utcnow()
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
     one_week_ago = now - timedelta(days=7)
 
     artisti_con_data = []
