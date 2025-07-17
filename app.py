@@ -249,13 +249,14 @@ def suggerimenti_per_artista(user_id):
     suggestions_dir = f"suggestions_cache/{user_id}"
     suggerimenti = {}
     visti = set()
+    artisti = []
 
-    # ✅ Se ci sono ascolti recenti, usali normalmente
+    # 🎧 STEP 1: Prova a leggere gli ascolti
     if os.path.exists(ascolti_path):
         with open(ascolti_path) as f:
             ascolti = json.load(f)
 
-        artisti = []
+        # 🎯 Estrai fino a 3 artisti unici più recenti (anche se ascolti vecchi)
         seen = set()
         for entry in reversed(ascolti):
             artist = entry.get("artist")
@@ -265,44 +266,45 @@ def suggerimenti_per_artista(user_id):
             if len(artisti) >= 3:
                 break
 
-        token = get_spotify_token()
+    # ✅ STEP 2: Se ho artisti, provo a generare suggerimenti (da cache o da API)
+    token = get_spotify_token()
 
-        for artista in artisti:
-            cached = carica_cache(user_id, artista)
-            if cached:
-                random.shuffle(cached)
-                blocco = [a for a in cached if a["name"] not in visti][:8]
-                for s in blocco:
-                    visti.add(s["name"])
-                suggerimenti[artista] = blocco
-                continue
+    for artista in artisti:
+        cached = carica_cache(user_id, artista)
+        if cached:
+            random.shuffle(cached)
+            blocco = [a for a in cached if a["name"] not in visti][:8]
+            for s in blocco:
+                visti.add(s["name"])
+            suggerimenti[artista] = blocco
+            continue
 
-            suggeriti_artist = []
+        suggeriti_artist = []
 
-            if token:
-                artist_id = search_artist_id(artista, token)
-                if artist_id:
-                    suggeriti_artist = get_related_artists(artist_id, token)
+        if token:
+            artist_id = search_artist_id(artista, token)
+            if artist_id:
+                suggeriti_artist = get_related_artists(artist_id, token)
 
-            if not suggeriti_artist or len(suggeriti_artist) < 3:
-                suggeriti_artist = get_lastfm_similar_artists(artista)
+        if not suggeriti_artist or len(suggeriti_artist) < 3:
+            suggeriti_artist = get_lastfm_similar_artists(artista)
 
-            nomi_unici = []
-            visti_locale = set()
-            for s in suggeriti_artist:
-                if s["name"] not in visti and s["name"] not in visti_locale:
-                    nomi_unici.append(s)
-                    visti_locale.add(s["name"])
-                if len(nomi_unici) >= 8:
-                    break
+        nomi_unici = []
+        visti_locale = set()
+        for s in suggeriti_artist:
+            if s["name"] not in visti and s["name"] not in visti_locale:
+                nomi_unici.append(s)
+                visti_locale.add(s["name"])
+            if len(nomi_unici) >= 8:
+                break
 
-            if nomi_unici:
-                suggerimenti[artista] = nomi_unici
-                for s in nomi_unici:
-                    visti.add(s["name"])
-                salva_cache(user_id, artista, suggeriti_artist)
+        if nomi_unici:
+            suggerimenti[artista] = nomi_unici
+            for s in nomi_unici:
+                visti.add(s["name"])
+            salva_cache(user_id, artista, suggeriti_artist)
 
-    # ❌ Nessun ascolto → prova a recuperare suggerimenti da cache esistenti
+    # 🧪 STEP 3: Se NON ho suggerimenti e ho cache → recupera dalla cache
     if not suggerimenti and os.path.exists(suggestions_dir):
         for filename in os.listdir(suggestions_dir):
             if filename.endswith(".json"):
@@ -322,6 +324,7 @@ def suggerimenti_per_artista(user_id):
 
     print("✅ Suggerimenti finali (anche da cache):", list(suggerimenti.keys()))
     return jsonify(suggerimenti)
+
 
 @app.route("/refresh_suggestions", methods=["POST"])
 def refresh_suggestions_all():
