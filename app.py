@@ -194,17 +194,21 @@ def carica_cache(user_id, artist_name):
 
 @app.route("/suggestions/<user_id>")
 def suggerimenti_per_utente(user_id):
-    ascolti_path = f"ascolti/{user_id}.json"
-    if not os.path.exists(ascolti_path):
-        print(f"📁 File ascolti non trovato: {ascolti_path}")
-        return jsonify([])
-
-    with open(ascolti_path) as f:
-        ascolti = json.load(f)
+    try:
+        # 🔄 Leggi gli ascolti da Supabase ordinati per timestamp decrescente
+        response = supabase.table("listening_history") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("timestamp", desc=True) \
+            .execute()
+        ascolti = response.data
+    except Exception as e:
+        print(f"❌ Errore Supabase: {e}")
+        return jsonify({"error": "Errore Supabase"}), 500
 
     artisti = []
     seen = set()
-    for entry in reversed(ascolti):
+    for entry in ascolti:
         artist = entry.get("artist")
         if artist and artist not in seen:
             artisti.append(artist)
