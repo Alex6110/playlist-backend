@@ -333,33 +333,96 @@ def refresh_suggestions_all():
     results = {}
 
     if not os.path.exists(users_path):
-        print("❌ Cartella ascolti non trovata")
         return jsonify({"error": "❌ Cartella ascolti non trovata"}), 404
 
     try:
         for filename in os.listdir(users_path):
-            print(f"➡️ Analizzo file: {filename}")
             if filename.endswith(".json"):
                 user_id = filename.replace(".json", "")
                 try:
-                    # 👉 Chiamata interna senza HTTP
-                    with app.test_request_context():
-                        res = suggerimenti_per_artista(user_id)
-                        if isinstance(res, tuple):
-                            status_code = res[1]
-                        else:
-                            status_code = 200
-                        if status_code == 200:
-                            results[user_id] = "✅ aggiornato"
-                        else:
-                            results[user_id] = f"❌ {status_code}"
+                    result = aggiorna_suggerimenti(user_id)
+                    results[user_id] = result.get("status", "✅")
                 except Exception as e:
                     print(f"⚠️ Errore per {user_id}: {str(e)}")
                     results[user_id] = f"❌ {str(e)}"
-
-        print("✅ Risultato finale:", results)
         return jsonify(results)
 
     except Exception as main_err:
-        print("🔥 ERRORE INTERNO NEL REFRESH:", str(main_err))
         return jsonify({"error": str(main_err)}), 500
+
+def aggiorna_suggerimenti(user_id):
+    ascolti_path = f"ascolti/{user_id}.json"
+    cache_dir = f"suggestions_cache/{user_id}"
+    if not os.path.exists(ascolti_path):
+        return {"error": "❌ Nessun ascolto trovato"}, 404
+
+    with open(ascolti_path) as f:
+        ascolti = json.load(f)
+
+    now = datetime.utcnow()
+    one_week_ago = now - timedelta(days=7)
+
+    # Estrai artisti ascoltati con timestamp, tenendo solo gli ultimi
+    artisti_con_data = []
+    visti = set()
+    for entry in reversed(ascolti):
+        artist = entry.get("artist")
+        timestamp_str = entry.get("timestamp")
+        try:
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+        except:
+            continue
+        if artist and artist not in visti:
+            artisti_con_data.append((artist, timestamp))
+            visti.add(artist)
+
+    if not artisti_con_data:
+        return {"error": "Nessun artista valido trovato"}
+
+    # Carica artisti già presenti in cache
+    artisti_in_cache = []
+    if os.path.exists(cache_dir):
+        for file in os.listdir(cache_dir):
+            if file.endswith(".json"):
+                artista = file.replace(".json", "")
+                artisti_in_cache.append(artista)
+
+    nuovi = []
+    mantenuti = []
+
+    for artist, timestamp in artisti_con_data:
+        if timestamp >= one_week_ago and artist not in artisti_in_cache:
+            nuovi.append(artist)
+        elif artist in artisti_in_cache:
+            mantenuti.append(artist)
+
+    # Caso: nessun nuovo ascolto → rigenero gli stessi
+    if not nuovi and mantenuti:
+        for artist in mantenuti:
+            suggeriti = get_lastfm_similar_artists(artist)
+            salva_cache(user_id, artist, suggeriti)
+        return {"status": "♻️ Nessun nuovo ascolto – rigenerati suggerimenti per gli stessi artisti"}
+
+    # Aggiungo nuove sezioni
+    for artist in nuovi:
+        suggeriti = get_lastfm_similar_artists(artist)
+        salva_cache(user_id, artist, suggeriti)
+
+    # Mantengo massimo 5 blocchi → rimuovo i più vecchi
+    tutti = nuovi + mantenuti
+    if len(tutti) > 5:
+        da_tenere = tutti[-5:]
+        da_rimuovere = [a for a in artisti_in_cache if a not in da_tenere]
+        for artista in da_rimuovere:
+            path = os.path.join(cache_dir, f"{artista}.json")
+            try:
+                os.remove(path)
+            except:
+                pass
+
+    return {"status": "✅ Suggerimenti aggiornati", "attivi": tutti[-5:]}
+
+@app.route("/debug/update_suggestions/<user_id>")
+def test_aggiorna(user_id):
+    result = aggiorna_suggerimenti(user_id)
+    return jsonify(result)
