@@ -345,43 +345,51 @@ def suggerimenti_per_artista(user_id):
 @app.route("/refresh_suggestions", methods=["POST"])
 def refresh_suggestions_all():
     print("🔁 Inizio aggiornamento suggerimenti...")
-    users_path = "ascolti"
     results = {}
 
-    if not os.path.exists(users_path):
-        return jsonify({"error": "❌ Cartella ascolti non trovata"}), 404
-
     try:
-        for filename in os.listdir(users_path):
-            if filename.endswith(".json"):
-                user_id = filename.replace(".json", "")
-                try:
-                    result = aggiorna_suggerimenti(user_id)
-                    results[user_id] = result.get("status", "✅")
-                except Exception as e:
-                    print(f"⚠️ Errore per {user_id}: {str(e)}")
-                    results[user_id] = f"❌ {str(e)}"
+        # Prende tutti gli user_id unici da Supabase
+        response = supabase.table("listening_history") \
+            .select("user_id") \
+            .execute()
+
+        user_ids = list(set([r["user_id"] for r in response.data if "user_id" in r]))
+
+        for user_id in user_ids:
+            try:
+                result = aggiorna_suggerimenti(user_id)
+                results[user_id] = result.get("status", "✅")
+            except Exception as e:
+                print(f"⚠️ Errore per {user_id}: {str(e)}")
+                results[user_id] = f"❌ {str(e)}"
+
         return jsonify(results)
 
     except Exception as main_err:
+        print(f"🔥 Errore generale: {main_err}")
         return jsonify({"error": str(main_err)}), 500
 
 def aggiorna_suggerimenti(user_id):
-    ascolti_path = f"ascolti/{user_id}.json"
     cache_dir = f"suggestions_cache/{user_id}"
-    if not os.path.exists(ascolti_path):
-        return {"error": "❌ Nessun ascolto trovato"}, 404
+    os.makedirs(cache_dir, exist_ok=True)
 
-    with open(ascolti_path) as f:
-        ascolti = json.load(f)
+    try:
+        response = supabase.table("listening_history") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("timestamp", desc=True) \
+            .execute()
+        ascolti = response.data
+    except Exception as e:
+        print(f"❌ Errore Supabase per {user_id}: {e}")
+        return {"error": str(e)}, 500
 
     now = datetime.utcnow()
     one_week_ago = now - timedelta(days=7)
 
-    # Estrai artisti ascoltati con timestamp, tenendo solo gli ultimi
     artisti_con_data = []
     visti = set()
-    for entry in reversed(ascolti):
+    for entry in ascolti:
         artist = entry.get("artist")
         timestamp_str = entry.get("timestamp")
         try:
@@ -412,19 +420,19 @@ def aggiorna_suggerimenti(user_id):
         elif artist in artisti_in_cache:
             mantenuti.append(artist)
 
-    # Caso: nessun nuovo ascolto → rigenero gli stessi
+    # ♻️ Nessun nuovo ascolto → rigenero artisti già in cache
     if not nuovi and mantenuti:
         for artist in mantenuti:
             suggeriti = get_lastfm_similar_artists(artist)
             salva_cache(user_id, artist, suggeriti)
         return {"status": "♻️ Nessun nuovo ascolto – rigenerati suggerimenti per gli stessi artisti"}
 
-    # Aggiungo nuove sezioni
+    # ➕ Suggerimenti per i nuovi
     for artist in nuovi:
         suggeriti = get_lastfm_similar_artists(artist)
         salva_cache(user_id, artist, suggeriti)
 
-    # Mantengo massimo 5 blocchi → rimuovo i più vecchi
+    # 🧹 Mantieni max 5 blocchi
     tutti = nuovi + mantenuti
     if len(tutti) > 5:
         da_tenere = tutti[-5:]
