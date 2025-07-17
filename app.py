@@ -42,17 +42,23 @@ def playlists():
     return jsonify({"error": "File playlist_auto.json non trovato"}), 404
 
 @app.route("/log", methods=["POST"])
-@app.route("/log", methods=["POST"])
 def log_ascolto():
     data = request.json
     user_id = data.get("userId")
     song_file = data.get("songFile")
     artist = data.get("artist")
     album = data.get("album", "")
-    timestamp = data.get("timestamp")
+    timestamp_str = data.get("timestamp")
 
-    if not user_id or not song_file or not artist:
+    if not user_id or not song_file or not artist or not timestamp_str:
         return jsonify({"error": "Dati incompleti"}), 400
+
+    try:
+        from dateutil import parser
+        timestamp = parser.isoparse(timestamp_str)
+    except Exception as e:
+        print(f"⚠️ Errore parsing timestamp: {e}")
+        return jsonify({"error": "Timestamp non valido"}), 400
 
     try:
         res = supabase.table("listening_history").insert({
