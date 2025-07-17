@@ -253,28 +253,33 @@ def debug_ascolti(user_id):
 
 @app.route("/suggestions-by-artist/<user_id>")
 def suggerimenti_per_artista(user_id):
-    ascolti_path = f"ascolti/{user_id}.json"
     suggestions_dir = f"suggestions_cache/{user_id}"
     suggerimenti = {}
     visti = set()
     artisti = []
 
-    # 🎧 STEP 1: Prova a leggere gli ascolti
-    if os.path.exists(ascolti_path):
-        with open(ascolti_path) as f:
-            ascolti = json.load(f)
+    # 🎧 STEP 1: Leggi gli ascolti da Supabase
+    try:
+        response = supabase.table("listening_history") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("timestamp", desc=True) \
+            .execute()
+        ascolti = response.data
+    except Exception as e:
+        print(f"❌ Errore nel recupero ascolti da Supabase: {e}")
+        return jsonify({"error": "Errore Supabase"}), 500
 
-        # 🎯 Estrai fino a 3 artisti unici più recenti (anche se ascolti vecchi)
-        seen = set()
-        for entry in reversed(ascolti):
-            artist = entry.get("artist")
-            if artist and artist not in seen:
-                artisti.append(artist)
-                seen.add(artist)
-            if len(artisti) >= 3:
-                break
+    # 🎯 Estrai fino a 3 artisti unici più recenti
+    seen = set()
+    for entry in ascolti:
+        artist = entry.get("artist")
+        if artist and artist not in seen:
+            artisti.append(artist)
+            seen.add(artist)
+        if len(artisti) >= 3:
+            break
 
-    # ✅ STEP 2: Se ho artisti, provo a generare suggerimenti (da cache o da API)
     token = get_spotify_token()
 
     for artista in artisti:
@@ -312,7 +317,7 @@ def suggerimenti_per_artista(user_id):
                 visti.add(s["name"])
             salva_cache(user_id, artista, suggeriti_artist)
 
-    # 🧪 STEP 3: Se NON ho suggerimenti e ho cache → recupera dalla cache
+    # 🧪 STEP 3: fallback cache
     if not suggerimenti and os.path.exists(suggestions_dir):
         for filename in os.listdir(suggestions_dir):
             if filename.endswith(".json"):
@@ -332,7 +337,6 @@ def suggerimenti_per_artista(user_id):
 
     print("✅ Suggerimenti finali (anche da cache):", list(suggerimenti.keys()))
     return jsonify(suggerimenti)
-
 
 @app.route("/refresh_suggestions", methods=["POST"])
 def refresh_suggestions_all():
