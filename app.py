@@ -55,7 +55,7 @@ def log_ascolto():
         return jsonify({"error": "Dati incompleti"}), 400
 
     try:
-        res = supabase.table("ascolti").insert({
+        res = supabase.table("listening_history").insert({
             "user_id": user_id,
             "artist": artist,
             "album": album,
