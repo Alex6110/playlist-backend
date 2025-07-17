@@ -246,64 +246,81 @@ def debug_ascolti(user_id):
 @app.route("/suggestions-by-artist/<user_id>")
 def suggerimenti_per_artista(user_id):
     ascolti_path = f"ascolti/{user_id}.json"
-    if not os.path.exists(ascolti_path):
-        return jsonify({})
-
-    with open(ascolti_path) as f:
-        ascolti = json.load(f)
-
-    # ✅ Estrai artisti ordinati per frequenza (più ascoltati prima)
-    artist_count = {}
-    for entry in ascolti:
-        artist = entry.get("artist")
-        if artist:
-            artist_count[artist] = artist_count.get(artist, 0) + 1
-
-    artisti = sorted(artist_count, key=artist_count.get, reverse=True)
-
-    token = get_spotify_token()
+    suggestions_dir = f"suggestions_cache/{user_id}"
     suggerimenti = {}
     visti = set()
 
-    for artista in artisti:
-        if len(suggerimenti) >= 3:
-            break
+    # ✅ Se ci sono ascolti recenti, usali normalmente
+    if os.path.exists(ascolti_path):
+        with open(ascolti_path) as f:
+            ascolti = json.load(f)
 
-        cached = carica_cache(user_id, artista)
-        if cached:
-            random.shuffle(cached)
-            blocco = [a for a in cached if a["name"] not in visti][:8]
-            for s in blocco:
-                visti.add(s["name"])
-            suggerimenti[artista] = blocco
-            continue
-
-        suggeriti_artist = []
-
-        if token:
-            artist_id = search_artist_id(artista, token)
-            if artist_id:
-                suggeriti_artist = get_related_artists(artist_id, token)
-
-        if not suggeriti_artist or len(suggeriti_artist) < 3:
-            suggeriti_artist = get_lastfm_similar_artists(artista)
-
-        nomi_unici = []
-        visti_locale = set()
-        for s in suggeriti_artist:
-            if s["name"] not in visti and s["name"] not in visti_locale:
-                nomi_unici.append(s)
-                visti_locale.add(s["name"])
-            if len(nomi_unici) >= 8:
+        artisti = []
+        seen = set()
+        for entry in reversed(ascolti):
+            artist = entry.get("artist")
+            if artist and artist not in seen:
+                artisti.append(artist)
+                seen.add(artist)
+            if len(artisti) >= 3:
                 break
 
-        if nomi_unici:
-            suggerimenti[artista] = nomi_unici
-            for s in nomi_unici:
-                visti.add(s["name"])
-            salva_cache(user_id, artista, suggeriti_artist)
+        token = get_spotify_token()
 
-    print("✅ Suggerimenti organizzati per artista (con caching):", list(suggerimenti.keys()))
+        for artista in artisti:
+            cached = carica_cache(user_id, artista)
+            if cached:
+                random.shuffle(cached)
+                blocco = [a for a in cached if a["name"] not in visti][:8]
+                for s in blocco:
+                    visti.add(s["name"])
+                suggerimenti[artista] = blocco
+                continue
+
+            suggeriti_artist = []
+
+            if token:
+                artist_id = search_artist_id(artista, token)
+                if artist_id:
+                    suggeriti_artist = get_related_artists(artist_id, token)
+
+            if not suggeriti_artist or len(suggeriti_artist) < 3:
+                suggeriti_artist = get_lastfm_similar_artists(artista)
+
+            nomi_unici = []
+            visti_locale = set()
+            for s in suggeriti_artist:
+                if s["name"] not in visti and s["name"] not in visti_locale:
+                    nomi_unici.append(s)
+                    visti_locale.add(s["name"])
+                if len(nomi_unici) >= 8:
+                    break
+
+            if nomi_unici:
+                suggerimenti[artista] = nomi_unici
+                for s in nomi_unici:
+                    visti.add(s["name"])
+                salva_cache(user_id, artista, suggeriti_artist)
+
+    # ❌ Nessun ascolto → prova a recuperare suggerimenti da cache esistenti
+    if not suggerimenti and os.path.exists(suggestions_dir):
+        for filename in os.listdir(suggestions_dir):
+            if filename.endswith(".json"):
+                artista = filename.replace(".json", "")
+                try:
+                    with open(os.path.join(suggestions_dir, filename)) as f:
+                        cached_data = json.load(f)
+                        blocco = cached_data.get("suggestions", [])
+                        random.shuffle(blocco)
+                        blocco_filtrato = [s for s in blocco if s["name"] not in visti][:8]
+                        if blocco_filtrato:
+                            suggerimenti[artista] = blocco_filtrato
+                            for s in blocco_filtrato:
+                                visti.add(s["name"])
+                except Exception as e:
+                    print(f"⚠️ Errore lettura cache per {artista}: {e}")
+
+    print("✅ Suggerimenti finali (anche da cache):", list(suggerimenti.keys()))
     return jsonify(suggerimenti)
 
 @app.route("/refresh_suggestions", methods=["POST"])
