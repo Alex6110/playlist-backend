@@ -66,7 +66,7 @@ def log_ascolto():
             "artist": artist,
             "album": album,
             "song_file": song_file,
-            "timestamp": timestamp
+            "timestamp": timestamp.isoformat()  # ✅ <-- CORRETTO QUI
         }).execute()
         return jsonify({"status": "✅ Ascolto salvato su Supabase"})
     except Exception as e:
