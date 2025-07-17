@@ -6,6 +6,12 @@ import requests
 from datetime import datetime, timedelta
 import random
 from flask_cors import CORS
+from supabase import create_client, Client
+
+SUPABASE_URL = "https://uoqhmrlcswcefgvgigwt.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvcWhtcmxjc3djZWZndmdpZ3d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3NjUyOTAsImV4cCI6MjA2ODM0MTI5MH0.lbB6UOQmG9aASXou8tTuk3sC9gJ7X15Nnoaq2kBsdUI"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
@@ -36,34 +42,30 @@ def playlists():
     return jsonify({"error": "File playlist_auto.json non trovato"}), 404
 
 @app.route("/log", methods=["POST"])
+@app.route("/log", methods=["POST"])
 def log_ascolto():
     data = request.json
     user_id = data.get("userId")
     song_file = data.get("songFile")
     artist = data.get("artist")
-    timestamp = data.get("timestamp", "")
+    album = data.get("album", "")
+    timestamp = data.get("timestamp")
 
-    if not user_id or not song_file:
+    if not user_id or not song_file or not artist:
         return jsonify({"error": "Dati incompleti"}), 400
 
-    os.makedirs("ascolti", exist_ok=True)
-    ascolti_path = f"ascolti/{user_id}.json"
-
-    ascolti = []
-    if os.path.exists(ascolti_path):
-        with open(ascolti_path, "r") as f:
-            ascolti = json.load(f)
-
-    ascolti.append({
-        "songFile": song_file,
-        "artist": artist,
-        "timestamp": timestamp
-    })
-
-    with open(ascolti_path, "w") as f:
-        json.dump(ascolti, f, indent=2)
-
-    return jsonify({"status": "✅ Ascolto registrato"})
+    try:
+        res = supabase.table("ascolti").insert({
+            "user_id": user_id,
+            "artist": artist,
+            "album": album,
+            "song_file": song_file,
+            "timestamp": timestamp
+        }).execute()
+        return jsonify({"status": "✅ Ascolto salvato su Supabase"})
+    except Exception as e:
+        print(f"❌ Errore inserimento Supabase: {e}")
+        return jsonify({"error": "❌ Errore salvataggio"}), 500
 
 @app.route("/playlists/<user_id>")
 def playlist_personalizzata(user_id):
