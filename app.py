@@ -433,7 +433,7 @@ def suggerisci_album(user_id):
             data = r.json()
             items = data.get("albums", {}).get("items", [])
             if items:
-                album = items[0]
+                album = random.choice(items)  # ✅ seleziona un album casuale
                 if album["name"] not in visti_album:
                     albums.append({
                         "album": album["name"],
