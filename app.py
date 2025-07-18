@@ -191,60 +191,6 @@ def carica_cache(user_id, artist_name):
 
     return data.get("suggestions", [])
 
-
-@app.route("/suggestions/<user_id>")
-def suggerimenti_per_utente(user_id):
-    try:
-        # 🔄 Leggi gli ascolti da Supabase ordinati per timestamp decrescente
-        response = supabase.table("listening_history") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .order("timestamp", desc=True) \
-            .execute()
-        ascolti = response.data
-    except Exception as e:
-        print(f"❌ Errore Supabase: {e}")
-        return jsonify({"error": "Errore Supabase"}), 500
-
-    artisti = []
-    seen = set()
-    for entry in ascolti:
-        artist = entry.get("artist")
-        if artist and artist not in seen:
-            artisti.append(artist)
-            seen.add(artist)
-        if len(artisti) >= 5:
-            break
-
-    print("🎧 Artisti ascoltati di recente:", artisti)
-
-    token = get_spotify_token()
-    suggeriti = []
-    visti = set()
-
-    for artista in artisti:
-        suggeriti_artist = []
-
-        if token:
-            artist_id = search_artist_id(artista, token)
-            if artist_id:
-                suggeriti_artist = get_related_artists(artist_id, token)
-
-        if not suggeriti_artist and LASTFM_API_KEY:
-            suggeriti_artist = get_lastfm_similar_artists(artista)
-
-        for a in suggeriti_artist:
-            if a["name"] not in artisti and a["name"] not in visti:
-                suggeriti.append(a)
-                visti.add(a["name"])
-            if len(suggeriti) >= 10:
-                break
-        if len(suggeriti) >= 10:
-            break
-
-    print("✅ Suggeriti finali:", [s["name"] for s in suggeriti])
-    return jsonify(suggeriti)
-
 @app.route("/debug/ascolti/<user_id>")
 def debug_ascolti(user_id):
     path = f"ascolti/{user_id}.json"
@@ -451,3 +397,52 @@ def aggiorna_suggerimenti(user_id):
 def test_aggiorna(user_id):
     result = aggiorna_suggerimenti(user_id)
     return jsonify(result)
+
+@app.route("/suggested_albums/<user_id>")
+def suggerisci_album(user_id):
+    token = get_spotify_token()
+    if not token:
+        return jsonify({"error": "Token Spotify mancante"}), 500
+
+    try:
+        res = suggerimenti_per_artista(user_id)
+        if isinstance(res, tuple):
+            suggeriti = res[0].get_json()
+        else:
+            suggeriti = res.get_json()
+    except Exception as e:
+        print(f"❌ Errore nel recupero suggeriti: {e}")
+        return jsonify({"error": "Errore suggerimenti"}), 500
+
+    albums = []
+    visti_album = set()
+
+    for artista, artist_suggestions in suggeriti.items():
+        for a in artist_suggestions:
+            nome_artista = a.get("name")
+            r = requests.get(
+                "https://api.spotify.com/v1/search",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"q": nome_artista, "type": "album", "limit": 1}
+            )
+            data = r.json()
+            items = data.get("albums", {}).get("items", [])
+            if items:
+                album = items[0]
+                if album["name"] not in visti_album:
+                    albums.append({
+                        "album": album["name"],
+                        "artist": album["artists"][0]["name"],
+                        "cover": album["images"][0]["url"] if album.get("images") else "img/note.jpg",
+                        "spotify_url": album.get("external_urls", {}).get("spotify", "")
+                    })
+                    visti_album.add(album["name"])
+
+            if len(albums) >= 10:
+                break
+        if len(albums) >= 10:
+            break
+
+    print("✅ Album suggeriti:", [a["album"] for a in albums])
+    return jsonify(albums)
+
