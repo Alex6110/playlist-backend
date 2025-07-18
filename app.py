@@ -433,17 +433,22 @@ def suggerisci_album(user_id):
                 r = requests.get(
                     "https://api.spotify.com/v1/search",
                     headers={"Authorization": f"Bearer {token}"},
-                    params={"q": nome_artista, "type": "album", "limit": 20}  # ✅ chiedi fino a 20
+                    params={
+                        "q": nome_artista,
+                        "type": "album",
+                        "limit": 20,
+                        "offset": random.randint(0, 20)  # 🔁 più varietà!
+                    }
                 )
                 data = r.json()
                 items = data.get("albums", {}).get("items", [])
 
-                random.shuffle(items)  # ✅ mescola per non prendere sempre i primi
+                random.shuffle(items)
 
                 for album in items:
                     nome_album = album["name"]
                     if nome_album in visti_album:
-                        continue  # salta duplicati
+                        continue
 
                     albums.append({
                         "album": nome_album,
@@ -456,6 +461,7 @@ def suggerisci_album(user_id):
             except Exception as e:
                 print(f"⚠️ Errore richiesta album per {nome_artista}: {e}")
 
-    random.shuffle(albums)  # ✅ mescola anche la lista finale
+    random.shuffle(albums)      # 🔁 mescola tutta la lista
+    albums = albums[:10]        # ✅ mostra solo 10 album finali
     print("✅ Album suggeriti (totale):", len(albums))
     return jsonify(albums)
