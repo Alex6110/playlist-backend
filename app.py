@@ -151,13 +151,16 @@ def get_lastfm_similar_artists(artist_name):
         "artist": artist_name,
         "api_key": LASTFM_API_KEY,
         "format": "json",
-        "limit": 5
+        "limit": 20
     }
     try:
         r = requests.get(url, params=params)
         data = r.json()
         similars = data.get("similarartists", {}).get("artist", [])
         print(f"🎯 Last.fm suggeriti per {artist_name}: {[a['name'] for a in similars]}")
+        
+        random.shuffle(similars)  # 🔁 Mescola la lista!
+         
         return [
             {
                 "name": a["name"],
