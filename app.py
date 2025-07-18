@@ -371,12 +371,14 @@ def aggiorna_suggerimenti(user_id):
     if not nuovi and mantenuti:
         for artist in mantenuti:
             suggeriti = get_lastfm_similar_artists(artist)
+            random.shuffle(suggeriti)
             salva_cache(user_id, artist, suggeriti)
         return {"status": "♻️ Nessun nuovo ascolto – rigenerati suggerimenti per gli stessi artisti"}
 
     # ➕ Suggerimenti per i nuovi
     for artist in nuovi:
         suggeriti = get_lastfm_similar_artists(artist)
+        random.shuffle(suggeriti)
         salva_cache(user_id, artist, suggeriti)
 
     # 🧹 Mantieni max 5 blocchi
