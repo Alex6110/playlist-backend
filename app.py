@@ -18,7 +18,7 @@ SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # 🔧 Crea le cartelle mancanti all'avvio
 os.makedirs("ascolti", exist_ok=True)
