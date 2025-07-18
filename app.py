@@ -151,20 +151,23 @@ def get_lastfm_similar_artists(artist_name):
         "artist": artist_name,
         "api_key": LASTFM_API_KEY,
         "format": "json",
-        "limit": 20
+        "limit": 100  # ✅ MASSIMO accettato da Last.fm
     }
     try:
         r = requests.get(url, params=params)
         data = r.json()
         similars = data.get("similarartists", {}).get("artist", [])
-        print(f"🎯 Last.fm suggeriti per {artist_name}: {[a['name'] for a in similars]}")
-        
-        random.shuffle(similars)  # 🔁 Mescola la lista!
-         
+
+        print(f"🎯 {len(similars)} artisti suggeriti da Last.fm per {artist_name}")
+
+        # 🔁 Shuffle per ottenere varietà
+        random.shuffle(similars)
+
+        # 🧹 Ritorna solo quelli con nome e immagine valida
         return [
             {
                 "name": a["name"],
-                "image": a["image"][-1]["#text"] if a.get("image") else "img/note.jpg"
+                "image": next((img["#text"] for img in a.get("image", []) if img["#text"]), "img/note.jpg")
             }
             for a in similars if a.get("name")
         ]
@@ -425,29 +428,34 @@ def suggerisci_album(user_id):
     for artista, artist_suggestions in suggeriti.items():
         for a in artist_suggestions:
             nome_artista = a.get("name")
-            r = requests.get(
-                "https://api.spotify.com/v1/search",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"q": nome_artista, "type": "album", "limit": 1}
-            )
-            data = r.json()
-            items = data.get("albums", {}).get("items", [])
-            if items:
-                album = random.choice(items)  # ✅ seleziona un album casuale
-                if album["name"] not in visti_album:
+
+            try:
+                r = requests.get(
+                    "https://api.spotify.com/v1/search",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"q": nome_artista, "type": "album", "limit": 20}  # ✅ chiedi fino a 20
+                )
+                data = r.json()
+                items = data.get("albums", {}).get("items", [])
+
+                random.shuffle(items)  # ✅ mescola per non prendere sempre i primi
+
+                for album in items:
+                    nome_album = album["name"]
+                    if nome_album in visti_album:
+                        continue  # salta duplicati
+
                     albums.append({
-                        "album": album["name"],
+                        "album": nome_album,
                         "artist": album["artists"][0]["name"],
                         "cover": album["images"][0]["url"] if album.get("images") else "img/note.jpg",
                         "spotify_url": album.get("external_urls", {}).get("spotify", "")
                     })
-                    visti_album.add(album["name"])
+                    visti_album.add(nome_album)
 
-            if len(albums) >= 10:
-                break
-        if len(albums) >= 10:
-            break
+            except Exception as e:
+                print(f"⚠️ Errore richiesta album per {nome_artista}: {e}")
 
-    print("✅ Album suggeriti:", [a["album"] for a in albums])
+    random.shuffle(albums)  # ✅ mescola anche la lista finale
+    print("✅ Album suggeriti (totale):", len(albums))
     return jsonify(albums)
-
