@@ -480,3 +480,66 @@ def suggerisci_album(user_id):
     albums = albums[:10]        # ✅ mostra solo 10 album finali
     print("✅ Album suggeriti (totale):", len(albums))
     return jsonify(albums)
+
+
+# ============================
+# 👤 Gestione utenti
+# ============================
+
+@app.route("/user/<user_id>", methods=["GET"])
+def get_user(user_id):
+    """Recupera i dati utente da Supabase, oppure lo crea se non esiste"""
+    try:
+        response = supabase.table("users").select("*").eq("id", user_id).execute()
+        if response.data:
+            return jsonify(response.data[0])
+        else:
+            # Se non esiste lo creo "vuoto"
+            new_user = {
+                "id": user_id,
+                "likedSongs": [],
+                "playlists": [],
+                "searchHistory": [],
+                "suggestedAlbums": []
+            }
+            supabase.table("users").insert(new_user).execute()
+            return jsonify(new_user)
+    except Exception as e:
+        print(f"❌ Errore get_user: {e}")
+        return jsonify({"error": "Errore nel recupero utente"}), 500
+
+
+@app.route("/users/<user_id>", methods=["PUT"])
+def update_user(user_id):
+    """Aggiorna o crea i dati utente su Supabase"""
+    data = request.json
+    try:
+        response = supabase.table("users").upsert(data, on_conflict=["id"]).execute()
+        return jsonify({"status": "✅ Utente aggiornato", "data": response.data})
+    except Exception as e:
+        print(f"❌ Errore update_user: {e}")
+        return jsonify({"error": "Errore aggiornamento utente"}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
