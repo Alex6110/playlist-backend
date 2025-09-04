@@ -73,6 +73,21 @@ def log_ascolto():
         print(f"❌ Errore inserimento Supabase: {e}")
         return jsonify({"error": "❌ Errore salvataggio"}), 500
 
+@app.route("/recently-played/<user_id>")
+def recently_played(user_id):
+    try:
+        response = supabase.table("listening_history") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("timestamp", desc=True) \
+            .limit(20) \
+            .execute()
+        # ✅ anche se non ci sono ascolti ritorna lista vuota
+        return jsonify(response.data or [])
+    except Exception as e:
+        print(f"❌ Errore recently-played: {e}")
+        return jsonify([]), 200
+
 @app.route("/playlists/<user_id>")
 def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
