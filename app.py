@@ -513,25 +513,36 @@ def suggerisci_album(user_id):
 # 👤 Gestione utenti
 # ============================
 
+# ============================
+# 👤 Gestione utenti
+# ============================
+
 @app.route("/user/<user_id>", methods=["GET"])
 def get_user(user_id):
     """Recupera i dati utente da Supabase, oppure lo crea se non esiste"""
     try:
         response = supabase.table("users").select("*").eq("id", user_id).execute()
         if response.data:
-            return jsonify(response.data[0])
+            user = response.data[0]
+            return jsonify(user.get("data", {}))
         else:
-            # Se non esiste lo creo "vuoto"
-            new_user = {
+            # Se non esiste lo creo con stato iniziale
+            new_user_data = {
                 "id": user_id,
-                "name": f"User {user_id[:4]}",
+                "name": f"User_{user_id[:4]}",
                 "likedSongs": [],
                 "playlists": [],
                 "searchHistory": [],
-                "suggestedAlbums": []
+                "suggestedAlbums": [],
+                "autoPlaylists": [],
+                "autoPlaylistsUpdatedAt": None,
+                "suggestionsByArtist": {}
             }
-            supabase.table("users").insert(new_user).execute()
-            return jsonify(new_user)
+            supabase.table("users").insert({
+                "id": user_id,
+                "data": new_user_data
+            }).execute()
+            return jsonify(new_user_data)
     except Exception as e:
         print(f"❌ Errore get_user: {e}")
         return jsonify({"error": "Errore nel recupero utente"}), 500
@@ -540,17 +551,19 @@ def get_user(user_id):
 @app.route("/user/<user_id>", methods=["PUT"])
 def update_user(user_id):
     """Aggiorna o crea i dati utente su Supabase"""
-    data = request.json or {}
+    data_in = request.json or {}
 
-    # 🔑 Assicuriamoci che l'id sia sempre presente
-    data["id"] = user_id
+    # 🔑 Assicuriamoci che ci sia un nome
+    if "name" not in data_in or not data_in["name"]:
+        data_in["name"] = f"User_{user_id[:4]}"
 
-    # Se non esiste "name", mettiamo un default per evitare errori in frontend
-    if "name" not in data or not data["name"]:
-        data["name"] = f"User_{user_id[:4]}"
+    payload = {
+        "id": user_id,
+        "data": data_in
+    }
 
     try:
-        response = supabase.table("users").upsert(data).execute()
+        response = supabase.table("users").upsert(payload, on_conflict="id").execute()
         return jsonify({"status": "✅ Utente aggiornato", "data": response.data})
     except Exception as e:
         print(f"❌ Errore update_user: {e}")
