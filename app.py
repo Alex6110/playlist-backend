@@ -524,6 +524,7 @@ def get_user(user_id):
             # Se non esiste lo creo "vuoto"
             new_user = {
                 "id": user_id,
+                "name": f"User {user_id[:4]}",
                 "likedSongs": [],
                 "playlists": [],
                 "searchHistory": [],
@@ -539,9 +540,17 @@ def get_user(user_id):
 @app.route("/user/<user_id>", methods=["PUT"])
 def update_user(user_id):
     """Aggiorna o crea i dati utente su Supabase"""
-    data = request.json
+    data = request.json or {}
+
+    # 🔑 Assicuriamoci che l'id sia sempre presente
+    data["id"] = user_id
+
+    # Se non esiste "name", mettiamo un default per evitare errori in frontend
+    if "name" not in data or not data["name"]:
+        data["name"] = f"User_{user_id[:4]}"
+
     try:
-        response = supabase.table("users").upsert(data, on_conflict=["id"]).execute()
+        response = supabase.table("users").upsert(data).execute()
         return jsonify({"status": "✅ Utente aggiornato", "data": response.data})
     except Exception as e:
         print(f"❌ Errore update_user: {e}")
