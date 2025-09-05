@@ -115,6 +115,42 @@ def recently_played(user_id):
         print(f"❌ Errore recently-played: {e}")
         return jsonify([]), 200
 
+@app.route("/recently-played/<user_id>", methods=["POST"])
+def add_recently_played(user_id):
+    """Aggiunge un elemento alla lista recentlyPlayed di un utente"""
+    try:
+        data = request.json or {}
+        entry = {
+            "type": data.get("type"),
+            "name": data.get("name"),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        # Recupera il campo "data" dell'utente
+        user_resp = supabase.table("users").select("data").eq("id", user_id).execute()
+        if user_resp.data:
+            current_data = user_resp.data[0].get("data") or {}
+        else:
+            current_data = {}
+
+        recently_played = current_data.get("recentlyPlayed", [])
+
+        # Rimuove duplicati
+        recently_played = [e for e in recently_played if not (e["type"] == entry["type"] and e["name"] == entry["name"])]
+
+        # Inserisce in cima e limita a 8
+        recently_played.insert(0, entry)
+        recently_played = recently_played[:8]
+
+        # Aggiorna Supabase
+        current_data["recentlyPlayed"] = recently_played
+        supabase.table("users").update({"data": current_data}).eq("id", user_id).execute()
+
+        return jsonify({"status": "✅ Aggiornato recentlyPlayed", "data": recently_played})
+    except Exception as e:
+        print(f"❌ Errore add_recently_played: {e}")
+        return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
+
 @app.route("/playlists/<user_id>")
 def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
