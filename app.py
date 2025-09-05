@@ -18,7 +18,22 @@ SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+
+# ✅ Specifica i domini permessi invece di "*"
+allowed_origins = ["http://localhost:8080", "https://playlist-frontend.onrender.com"]
+
+CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=True)
+
+# ✅ Fix per CORS
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+    return response
 
 # 🔧 Crea le cartelle mancanti all'avvio
 os.makedirs("ascolti", exist_ok=True)
@@ -40,6 +55,17 @@ def playlists():
     if os.path.exists("playlist_auto.json"):
         return send_file("playlist_auto.json", mimetype="application/json")
     return jsonify({"error": "File playlist_auto.json non trovato"}), 404
+
+# ✅ Nuova rotta per servire songs_min2.json
+@app.route("/songs")
+def get_songs():
+    if os.path.exists("songs_min2.json"):
+        return send_file("songs_min2.json", mimetype="application/json")
+    return jsonify({"error": "songs_min2.json non trovato"}), 404
+
+# ============================
+# ⬇️ (da qui in poi resta tutto il tuo codice identico)
+# ============================
 
 @app.route("/log", methods=["POST"])
 def log_ascolto():
@@ -66,12 +92,13 @@ def log_ascolto():
             "artist": artist,
             "album": album,
             "song_file": song_file,
-            "timestamp": timestamp.isoformat()  # ✅ <-- CORRETTO QUI
+            "timestamp": timestamp.isoformat()
         }).execute()
         return jsonify({"status": "✅ Ascolto salvato su Supabase"})
     except Exception as e:
         print(f"❌ Errore inserimento Supabase: {e}")
         return jsonify({"error": "❌ Errore salvataggio"}), 500
+
 
 @app.route("/recently-played/<user_id>")
 def recently_played(user_id):
@@ -519,27 +546,3 @@ def update_user(user_id):
     except Exception as e:
         print(f"❌ Errore update_user: {e}")
         return jsonify({"error": "Errore aggiornamento utente"}), 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
