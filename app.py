@@ -536,7 +536,7 @@ def get_user(user_id):
         return jsonify({"error": "Errore nel recupero utente"}), 500
 
 
-@app.route("/users/<user_id>", methods=["PUT"])
+@app.route("/user/<user_id>", methods=["PUT"])
 def update_user(user_id):
     """Aggiorna o crea i dati utente su Supabase"""
     data = request.json
