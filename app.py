@@ -32,7 +32,7 @@ app = Flask(__name__)
 # ========================
 if os.environ.get("FLASK_ENV") == "development":
     # In locale → accetta tutto
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+    CORS(app, resources={r"/*": {"origins": ["*", "null"]}}, supports_credentials=True)
 else:
     # In produzione → accetta solo frontend specifici
     CORS(app, resources={
