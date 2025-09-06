@@ -19,6 +19,23 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
 app = Flask(__name__)
 
+# Intercetta tutte le richieste OPTIONS e risponde 200
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        headers = resp.headers
+
+        # aggiungi intestazioni CORS
+        origin = request.headers.get("Origin")
+        if origin in allowed_origins:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+
+        return resp
+
 # ✅ Specifica i domini permessi
 allowed_origins = [
     "http://localhost:8080",
@@ -26,7 +43,13 @@ allowed_origins = [
     "https://playlist-frontend.onrender.com"
 ]
 
-CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=True)
+CORS(app,
+     resources={r"/*": {
+         "origins": allowed_origins,
+         "allow_headers": ["Content-Type", "Authorization"],
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+     }},
+     supports_credentials=True)
 
 @app.after_request
 def add_cors_headers(response):
