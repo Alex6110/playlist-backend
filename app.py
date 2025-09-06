@@ -6,6 +6,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 import random
 from supabase import create_client, Client
+from flask_cors import CORS
 
 # ========================
 # 🔑 Supabase
@@ -27,37 +28,24 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 app = Flask(__name__)
 
 # ========================
-# 🌍 Allowed Origins
+# 🌍 CORS
 # ========================
 if os.environ.get("FLASK_ENV") == "development":
-    allowed_origins = ["*", "null", "http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"]
+    # In locale → accetta tutto
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 else:
-    allowed_origins = [
-        "https://playlist-frontend.onrender.com",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://[::1]:8080"
-    ]
-
-@app.after_request
-def add_cors_headers(response):
-    origin = request.headers.get("Origin")
-    print("🌍 Origin ricevuto:", origin)
-
-    # Se in dev accettiamo tutto
-    if "*" in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin or "*"
-    # Se origin è specifico e ammesso
-    elif origin in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-    # Caso particolare Safari/Chrome che mandano "null"
-    elif origin == "null" and "null" in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = "*"
-
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
-    return response
+    # In produzione → accetta solo frontend specifici
+    CORS(app, resources={
+        r"/*": {
+            "origins": [
+                "https://playlist-frontend.onrender.com",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                "http://[::1]:8080",
+                "null"  # Safari manda Origin:null
+            ]
+        }
+    }, supports_credentials=True)
 
 # ========================
 # 📂 Crea cartelle necessarie
@@ -89,9 +77,7 @@ def playlists():
 def get_songs():
     if os.path.exists("songs_min2.json"):
         return send_file("songs_min2.json", mimetype="application/json")
-    return jsonify({"error": "songs_min2.json non trovato"}), 404
-
-# ============================
+    return jsonify({"error": "songs_min2.json non trovato"}), 404# ============================
 # ⬇️ Tutto il resto del tuo codice invariato
 # ============================
 
@@ -577,10 +563,6 @@ def suggerisci_album(user_id):
 # 👤 Gestione utenti
 # ============================
 
-# ============================
-# 👤 Gestione utenti
-# ============================
-
 @app.route("/user/<user_id>", methods=["GET"])
 def get_user(user_id):
     """Recupera i dati utente da Supabase, oppure lo crea se non esiste"""
@@ -632,3 +614,5 @@ def update_user(user_id):
     except Exception as e:
         print(f"❌ Errore update_user: {e}")
         return jsonify({"error": "Errore aggiornamento utente"}), 500
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
