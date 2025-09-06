@@ -28,10 +28,15 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 app = Flask(__name__)
 
 # ✅ Imposta gli origin permessi
+# ✅ Imposta gli origin permessi
 if os.environ.get("FLASK_ENV") == "development":
     allowed_origins = ["*"]  # in locale accetta tutto
 else:
-    allowed_origins = ["https://playlist-frontend.onrender.com"]
+    allowed_origins = [
+        "https://playlist-frontend.onrender.com",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080"
+    ]
 
 CORS(app,
      resources={r"/*": {"origins": allowed_origins}},
