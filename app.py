@@ -27,40 +27,33 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        response = app.make_default_options_response()
-        headers = response.headers
-
-        origin = request.headers.get("Origin")
-        # In dev accetti tutto
-        headers["Access-Control-Allow-Origin"] = origin or "*"
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
-
-        return response
-
 # ========================
 # 🌍 CORS
 # ========================
 if os.environ.get("FLASK_ENV") == "development":
     # In locale → accetta tutto
-    CORS(app, resources={r"/*": {"origins": ["*", "null"]}}, supports_credentials=True)
+    CORS(app,
+         resources={r"/*": {"origins": "*"}},
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 else:
     # In produzione → accetta solo frontend specifici
-    CORS(app, resources={
-        r"/*": {
-            "origins": [
-                "https://playlist-frontend.onrender.com",
-                "http://localhost:8080",
-                "http://127.0.0.1:8080",
-                "http://[::1]:8080",
-                "null"  # Safari manda Origin:null
-            ]
-        }
-    }, supports_credentials=True)
+    CORS(app,
+         resources={
+             r"/*": {
+                 "origins": [
+                     "https://playlist-frontend.onrender.com",
+                     "http://localhost:8080",
+                     "http://127.0.0.1:8080",
+                     "http://[::1]:8080",
+                     "null"  # Safari manda Origin:null
+                 ]
+             }
+         },
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # ========================
 # 📂 Crea cartelle necessarie
