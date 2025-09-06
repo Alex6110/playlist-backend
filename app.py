@@ -8,63 +8,57 @@ import random
 from flask_cors import CORS
 from supabase import create_client, Client
 
+# ========================
+# 🔑 Supabase
+# ========================
 SUPABASE_URL = "https://uoqhmrlcswcefgvgigwt.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvcWhtcmxjc3djZWZndmdpZ3d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3NjUyOTAsImV4cCI6MjA2ODM0MTI5MH0.lbB6UOQmG9aASXou8tTuk3sC9gJ7X15Nnoaq2kBsdUI"
-
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ========================
+# 🔑 API esterne
+# ========================
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
+# ========================
+# 🚀 Flask App
+# ========================
 app = Flask(__name__)
 
-# Intercetta tutte le richieste OPTIONS e risponde 200
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        resp = app.make_default_options_response()
-        headers = resp.headers
-
-        # aggiungi intestazioni CORS
-        origin = request.headers.get("Origin")
-        if origin in allowed_origins:
-            headers["Access-Control-Allow-Origin"] = origin
-            headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
-
-        return resp
-
-# ✅ Specifica i domini permessi
-allowed_origins = [
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "https://playlist-frontend.onrender.com"
-]
+# ✅ Imposta gli origin permessi
+if os.environ.get("FLASK_ENV") == "development":
+    allowed_origins = ["*"]  # in locale accetta tutto
+else:
+    allowed_origins = ["https://playlist-frontend.onrender.com"]
 
 CORS(app,
-     resources={r"/*": {
-         "origins": allowed_origins,
-         "allow_headers": ["Content-Type", "Authorization"],
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-     }},
+     resources={r"/*": {"origins": allowed_origins}},
      supports_credentials=True)
 
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
-    if origin in allowed_origins:
+    if "*" in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    elif origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
+
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
     return response
 
-# 🔧 Crea le cartelle mancanti all'avvio
+# ========================
+# 📂 Crea cartelle necessarie
+# ========================
 os.makedirs("ascolti", exist_ok=True)
 os.makedirs("suggestions_cache", exist_ok=True)
 
+# ========================
+# 🏠 Rotte base
+# ========================
 @app.route("/")
 def home():
     return "🎶 Playlist Backend attivo!"
@@ -82,7 +76,6 @@ def playlists():
         return send_file("playlist_auto.json", mimetype="application/json")
     return jsonify({"error": "File playlist_auto.json non trovato"}), 404
 
-# ✅ Nuova rotta per servire songs_min2.json
 @app.route("/songs")
 def get_songs():
     if os.path.exists("songs_min2.json"):
