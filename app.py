@@ -5,7 +5,6 @@ import genera_playlist_auto
 import requests
 from datetime import datetime, timedelta, timezone
 import random
-from flask_cors import CORS
 from supabase import create_client, Client
 
 # ========================
@@ -27,29 +26,33 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
-# ✅ Imposta gli origin permessi
-# ✅ Imposta gli origin permessi
+# ========================
+# 🌍 Allowed Origins
+# ========================
 if os.environ.get("FLASK_ENV") == "development":
-    allowed_origins = ["*"]  # in locale accetta tutto
+    allowed_origins = ["*", "null", "http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"]
 else:
     allowed_origins = [
         "https://playlist-frontend.onrender.com",
         "http://localhost:8080",
-        "http://127.0.0.1:8080"
+        "http://127.0.0.1:8080",
+        "http://[::1]:8080"
     ]
-
-CORS(app,
-     resources={r"/*": {"origins": allowed_origins}},
-     supports_credentials=True)
 
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
-    print("🌍 Origin ricevuto:", origin)   # 👈 DEBUG
+    print("🌍 Origin ricevuto:", origin)
+
+    # Se in dev accettiamo tutto
     if "*" in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    # Se origin è specifico e ammesso
     elif origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
+    # Caso particolare Safari/Chrome che mandano "null"
+    elif origin == "null" and "null" in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = "*"
 
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
@@ -89,7 +92,7 @@ def get_songs():
     return jsonify({"error": "songs_min2.json non trovato"}), 404
 
 # ============================
-# ⬇️ (da qui in poi resta tutto il tuo codice identico)
+# ⬇️ Tutto il resto del tuo codice invariato
 # ============================
 
 @app.route("/log", methods=["POST"])
