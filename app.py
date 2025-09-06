@@ -19,12 +19,15 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 
 app = Flask(__name__)
 
-# ✅ Specifica i domini permessi invece di "*"
-allowed_origins = ["http://localhost:8080", "https://playlist-frontend.onrender.com"]
+# ✅ Specifica i domini permessi
+allowed_origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "https://playlist-frontend.onrender.com"
+]
 
 CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=True)
 
-# ✅ Fix per CORS
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
