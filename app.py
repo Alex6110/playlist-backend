@@ -45,7 +45,7 @@ CORS(app,
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
-     print("🌍 Origin ricevuto:", origin)   # 👈 DEBUG
+    print("🌍 Origin ricevuto:", origin)   # 👈 DEBUG
     if "*" in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin or "*"
     elif origin in allowed_origins:
