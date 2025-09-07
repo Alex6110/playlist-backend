@@ -27,6 +27,19 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        headers = resp.headers
+
+        headers["Access-Control-Allow-Origin"] = request.headers.get("Origin") or "*"
+        headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers", "Content-Type,Authorization")
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+        return resp
+
 ## ========================
 # 🌍 CORS
 # =========================
@@ -607,7 +620,7 @@ def get_user(user_id):
         return jsonify({"error": "Errore nel recupero utente"}), 500
 
 
-@app.route("/user/<user_id>", methods=["PUT"])
+@app.route("/user/<user_id>", methods=["PUT", "OPTIONS"])
 def update_user(user_id):
     """Aggiorna o crea i dati utente su Supabase"""
     data_in = request.json or {}
