@@ -27,50 +27,26 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        resp = app.make_default_options_response()
-        h = resp.headers
-        origin = request.headers.get("Origin")
-        h["Access-Control-Allow-Origin"] = origin or "null"
-        h["Vary"] = "Origin"
-        h["Access-Control-Allow-Credentials"] = "true"
-        h["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        req_hdrs = request.headers.get("Access-Control-Request-Headers")
-        h["Access-Control-Allow-Headers"] = req_hdrs or "Content-Type, Authorization"
-        return resp
-
-@app.after_request
-def add_cors_headers(resp):
-    origin = request.headers.get("Origin")
-    if origin:
-        resp.headers["Access-Control-Allow-Origin"] = origin
-    else:
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-
-    resp.headers["Vary"] = "Origin"
-    resp.headers["Access-Control-Allow-Credentials"] = "true"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = request.headers.get(
-        "Access-Control-Request-Headers", "Content-Type, Authorization"
-    )
-    return resp
-
-
 ## ========================
 # 🌍 CORS
 # ========================
-ENV = os.environ.get("FLASK_ENV", "development")
-
-ALLOWED_ORIGINS = [
-    "https://playlist-frontend.onrender.com",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://[::1]:8080",
-    "http://localhost:5173",
-    "null",  # Safari / file://
-]
+if os.environ.get("FLASK_ENV") == "development":
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+else:
+    CORS(
+        app,
+        resources={r"/*": {"origins": [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+            "http://localhost:5173",
+            "https://playlist-frontend.onrender.com",
+            "null"
+        ]}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
 
 # ========================
 # 📂 Crea cartelle necessarie
