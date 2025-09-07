@@ -142,36 +142,44 @@ def log_ascolto():
         return jsonify({"error": "❌ Errore salvataggio"}), 500
 
 
-@app.route("/recently-played/<user_id>", methods=["GET", "OPTIONS"])
+@app.route("/recently-played/<user_id>", methods=["GET", "POST", "OPTIONS"])
 def recently_played(user_id):
     try:
+        if request.method == "POST":
+            data = request.json
+            song_file = data.get("songFile")
+            artist = data.get("artist")
+            album = data.get("album", "")
+            timestamp_str = data.get("timestamp")
+
+            if not song_file or not artist or not timestamp_str:
+                return jsonify({"error": "Dati incompleti"}), 400
+
+            from dateutil import parser
+            timestamp = parser.isoparse(timestamp_str)
+
+            supabase.table("listening_history").insert({
+                "user_id": user_id,
+                "artist": artist,
+                "album": album,
+                "song_file": song_file,
+                "timestamp": timestamp.isoformat()
+            }).execute()
+
+            return jsonify({"status": "✅ Salvataggio effettuato"})
+
+        # caso GET → ritorna gli ascolti recenti
         response = supabase.table("listening_history") \
             .select("*") \
             .eq("user_id", user_id) \
             .order("timestamp", desc=True) \
             .limit(20) \
             .execute()
+        return jsonify(response.data or [])
 
-        raw_data = response.data or []
-
-        # 🔄 Converto snake_case → camelCase
-        formatted = [
-            {
-                "id": r["id"],
-                "userId": r["user_id"],
-                "artist": r["artist"],
-                "album": r["album"],
-                "songFile": r["song_file"],
-                "timestamp": r["timestamp"]
-            }
-            for r in raw_data
-        ]
-
-        # ✅ RITORNO UNA LISTA, non un oggetto
-        return jsonify(formatted)
     except Exception as e:
         print(f"❌ Errore recently-played: {e}")
-        return jsonify([]), 200
+        return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
 
 @app.route("/recently-played/<user_id>", methods=["POST"])
 def add_recently_played(user_id):
