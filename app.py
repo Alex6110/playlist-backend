@@ -35,9 +35,10 @@ if os.environ.get("FLASK_ENV") == "development":
         app,
         resources={r"/*": {"origins": [
             "http://localhost:8080",
-            "http://127.0.0.1:8080",
+            "http://127.0.0.1:8080",   # <--- aggiungi questo
             "http://[::1]:8080",
-            "http://localhost:5173"
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"    # <--- e questo se usi vite
         ]}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
