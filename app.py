@@ -217,6 +217,8 @@ def add_recently_played(user_id):
         print(f"❌ Errore add_recently_played: {e}")
         return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
 
+import time
+
 @app.route("/playlists/<user_id>", methods=["GET", "OPTIONS"])
 def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
@@ -226,12 +228,21 @@ def playlist_personalizzata(user_id):
                 data = json.load(f)
             return jsonify(data)
 
-        # Se non esiste nessuna playlist, torna lista vuota
-        return jsonify([])
+        # ✅ Se non esiste nessuna playlist, torna oggetto coerente
+        return jsonify({
+            "autoPlaylists": [],
+            "autoPlaylistsUpdatedAt": int(time.time() * 1000),  # timestamp ms
+            "userId": user_id
+        })
 
     except Exception as e:
         print(f"❌ Errore playlist_personalizzata: {e}")
-        return jsonify([]), 200
+        return jsonify({
+            "autoPlaylists": [],
+            "autoPlaylistsUpdatedAt": int(time.time() * 1000),
+            "userId": user_id
+        }), 200
+
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
