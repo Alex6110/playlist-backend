@@ -45,10 +45,18 @@ def handle_preflight():
 def add_cors_headers(resp):
     origin = request.headers.get("Origin")
     if origin:
-        resp.headers.setdefault("Access-Control-Allow-Origin", origin)
-        resp.headers.setdefault("Vary", "Origin")
-        resp.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        resp.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+
+    resp.headers["Vary"] = "Origin"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = request.headers.get(
+        "Access-Control-Request-Headers", "Content-Type, Authorization"
+    )
     return resp
+
 
 ## ========================
 # 🌍 CORS
@@ -63,23 +71,6 @@ ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "null",  # Safari / file://
 ]
-
-if ENV == "development":
-    CORS(
-        app,
-        resources={r"/*": {"origins": "*"}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
-else:
-    CORS(
-        app,
-        resources={r"/*": {"origins": ALLOWED_ORIGINS}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
 
 # ========================
 # 📂 Crea cartelle necessarie
@@ -526,11 +517,6 @@ def aggiorna_suggerimenti(user_id):
                 pass
 
     return {"status": "✅ Suggerimenti aggiornati", "attivi": tutti[-5:]}
-
-@app.route("/debug/ascolti/<user_id>", methods=["GET", "OPTIONS"])
-def test_aggiorna(user_id):
-    result = aggiorna_suggerimenti(user_id)
-    return jsonify(result)
 
 @app.route("/suggested_albums/<user_id>", methods=["GET", "OPTIONS"])
 def suggerisci_album(user_id):
