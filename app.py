@@ -225,32 +225,21 @@ def playlist_personalizzata(user_id):
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-
-            # 🔑 Se il file è un array, wrappalo nell'oggetto corretto
+            # 🔑 Se il file contiene già una lista di playlist → torna così
             if isinstance(data, list):
-                return jsonify({
-                    "autoPlaylists": data,
-                    "autoPlaylistsUpdatedAt": int(time.time() * 1000),
-                    "userId": user_id
-                })
+                return jsonify(data)
+            # 🔑 Se invece il file contiene un oggetto con autoPlaylists → estrai solo la lista
+            if isinstance(data, dict) and "autoPlaylists" in data:
+                return jsonify(data["autoPlaylists"])
+            # Altrimenti fallback → lista vuota
+            return jsonify([])
 
-            # 🔑 Se è già un oggetto con autoPlaylists, torna così com’è
-            return jsonify(data)
-
-        # ✅ Nessun file → ritorna oggetto coerente vuoto
-        return jsonify({
-            "autoPlaylists": [],
-            "autoPlaylistsUpdatedAt": int(time.time() * 1000),
-            "userId": user_id
-        })
+        # ✅ Nessun file → torna una lista vuota
+        return jsonify([])
 
     except Exception as e:
         print(f"❌ Errore playlist_personalizzata: {e}")
-        return jsonify({
-            "autoPlaylists": [],
-            "autoPlaylistsUpdatedAt": int(time.time() * 1000),
-            "userId": user_id
-        }), 200
+        return jsonify([]), 200
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
