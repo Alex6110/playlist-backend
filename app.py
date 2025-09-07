@@ -151,11 +151,12 @@ def recently_played(user_id):
             .order("timestamp", desc=True) \
             .limit(20) \
             .execute()
-        # ✅ anche se non ci sono ascolti ritorna lista vuota
-        return jsonify(response.data or [])
+        
+        # ✅ Wrappo i dati in un oggetto
+        return jsonify({"recentlyPlayed": response.data or []})
     except Exception as e:
         print(f"❌ Errore recently-played: {e}")
-        return jsonify([]), 200
+        return jsonify({"recentlyPlayed": []}), 200
 
 @app.route("/recently-played/<user_id>", methods=["POST"])
 def add_recently_played(user_id):
