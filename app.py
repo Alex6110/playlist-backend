@@ -7,10 +7,12 @@ from datetime import datetime, timedelta, timezone
 import random
 from supabase import create_client, Client
 from flask_cors import CORS
-from dotenv import load_dotenv
 
-# Carica variabili dal file .env
-load_dotenv()
+
+# Carica variabili dal file .env solo in locale
+if os.environ.get("FLASK_ENV") == "development":
+    from dotenv import load_dotenv
+    load_dotenv()
 # ========================
 # 🔑 Supabase
 # ========================
