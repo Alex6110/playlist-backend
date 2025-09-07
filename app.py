@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import random
 from supabase import create_client, Client
 from flask_cors import CORS
+import time
 
 
 # Carica variabili dal file .env solo in locale
@@ -217,8 +218,6 @@ def add_recently_played(user_id):
         print(f"❌ Errore add_recently_played: {e}")
         return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
 
-import time
-
 @app.route("/playlists/<user_id>", methods=["GET", "OPTIONS"])
 def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
@@ -226,12 +225,22 @@ def playlist_personalizzata(user_id):
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+
+            # 🔑 Se il file è un array, wrappalo nell'oggetto corretto
+            if isinstance(data, list):
+                return jsonify({
+                    "autoPlaylists": data,
+                    "autoPlaylistsUpdatedAt": int(time.time() * 1000),
+                    "userId": user_id
+                })
+
+            # 🔑 Se è già un oggetto con autoPlaylists, torna così com’è
             return jsonify(data)
 
-        # ✅ Se non esiste nessuna playlist, torna oggetto coerente
+        # ✅ Nessun file → ritorna oggetto coerente vuoto
         return jsonify({
             "autoPlaylists": [],
-            "autoPlaylistsUpdatedAt": int(time.time() * 1000),  # timestamp ms
+            "autoPlaylistsUpdatedAt": int(time.time() * 1000),
             "userId": user_id
         })
 
@@ -242,7 +251,6 @@ def playlist_personalizzata(user_id):
             "autoPlaylistsUpdatedAt": int(time.time() * 1000),
             "userId": user_id
         }), 200
-
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
