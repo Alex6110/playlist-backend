@@ -29,24 +29,31 @@ app = Flask(__name__)
 
 ## ========================
 # 🌍 CORS
-# ========================
+# =========================
 if os.environ.get("FLASK_ENV") == "development":
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-else:
     CORS(
         app,
         resources={r"/*": {"origins": [
             "http://localhost:8080",
             "http://127.0.0.1:8080",
             "http://[::1]:8080",
-            "http://localhost:5173",
-            "https://playlist-frontend.onrender.com",
-            "null"
+            "http://localhost:5173"
         ]}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     )
+else:
+    CORS(
+        app,
+        resources={r"/*": {"origins": [
+            "https://playlist-frontend.onrender.com"
+        ]}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
+
 
 # ========================
 # 📂 Crea cartelle necessarie
@@ -57,6 +64,15 @@ os.makedirs("suggestions_cache", exist_ok=True)
 # ========================
 # 🏠 Rotte base
 # ========================
+@app.after_request
+def after_request(response):
+    response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin") or "*")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+    return response
+
+
 @app.route("/")
 def home():
     return "🎶 Playlist Backend attivo!"
