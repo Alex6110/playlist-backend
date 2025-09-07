@@ -220,29 +220,18 @@ def add_recently_played(user_id):
 
 @app.route("/playlists/<user_id>", methods=["GET", "OPTIONS"])
 def playlist_personalizzata(user_id):
-    path = f"playlist_utenti/{user_id}.json"
     try:
+        path = f"playlist_utenti/{user_id}.json"
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            return jsonify({"autoPlaylists": data})
 
-            # Se il file contiene già una lista di playlist, ritorna direttamente
-            if isinstance(data, list):
-                return jsonify(data)
-
-            # Se contiene un oggetto con autoPlaylists, estrai la lista
-            if isinstance(data, dict) and "autoPlaylists" in data:
-                return jsonify(data["autoPlaylists"])
-
-            # Altrimenti, fallback a lista vuota
-            return jsonify([])
-
-        # ✅ Nessun file → ritorna array vuoto
-        return jsonify([])
-
+        # Nessun file → array vuoto
+        return jsonify({"autoPlaylists": []})
     except Exception as e:
         print(f"❌ Errore playlist_personalizzata: {e}")
-        return jsonify([])
+        return jsonify({"autoPlaylists": []}), 200
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
