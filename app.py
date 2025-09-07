@@ -151,9 +151,10 @@ def recently_played(user_id):
             .order("timestamp", desc=True) \
             .limit(20) \
             .execute()
-        
-        # ✅ Wrappo i dati in un oggetto
-        return jsonify({"recentlyPlayed": response.data or []})
+
+        data = response.data or []
+        # ✅ SEMPRE oggetto con chiave "recentlyPlayed"
+        return jsonify({"recentlyPlayed": data})
     except Exception as e:
         print(f"❌ Errore recently-played: {e}")
         return jsonify({"recentlyPlayed": []}), 200
@@ -199,8 +200,8 @@ def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
     if os.path.exists(path):
         return send_file(path, mimetype="application/json")
-    
-    # ✅ Ritorna sempre un oggetto con la chiave che il frontend si aspetta
+
+    # ✅ Ritorna sempre oggetto coerente
     return jsonify({"autoPlaylists": []})
 
 @app.route("/generate/<user_id>")
