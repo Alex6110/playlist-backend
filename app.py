@@ -199,7 +199,9 @@ def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
     if os.path.exists(path):
         return send_file(path, mimetype="application/json")
-    return jsonify([])
+    
+    # ✅ Ritorna sempre un oggetto con la chiave che il frontend si aspetta
+    return jsonify({"autoPlaylists": []})
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
