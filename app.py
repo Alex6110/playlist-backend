@@ -167,10 +167,11 @@ def recently_played(user_id):
             for r in raw_data
         ]
 
-        return jsonify({"recentlyPlayed": formatted})
+        # ✅ RITORNO UNA LISTA, non un oggetto
+        return jsonify(formatted)
     except Exception as e:
         print(f"❌ Errore recently-played: {e}")
-        return jsonify({"recentlyPlayed": []}), 200
+        return jsonify([]), 200
 
 @app.route("/recently-played/<user_id>", methods=["POST"])
 def add_recently_played(user_id):
@@ -214,11 +215,13 @@ def playlist_personalizzata(user_id):
     if os.path.exists(path):
         return send_file(path, mimetype="application/json")
 
-    # ✅ Risposta coerente col frontend
+    # ✅ Risposta coerente con ciò che il frontend si aspetta
     return jsonify({
         "autoPlaylists": [],
-        "autoPlaylistsUpdatedAt": None
+        "autoPlaylistsUpdatedAt": None,
+        "userId": user_id
     })
+
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
