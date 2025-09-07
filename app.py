@@ -7,12 +7,15 @@ from datetime import datetime, timedelta, timezone
 import random
 from supabase import create_client, Client
 from flask_cors import CORS
+from dotenv import load_dotenv
 
+# Carica variabili dal file .env
+load_dotenv()
 # ========================
 # 🔑 Supabase
 # ========================
-SUPABASE_URL = "https://uoqhmrlcswcefgvgigwt.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ========================
