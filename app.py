@@ -152,9 +152,22 @@ def recently_played(user_id):
             .limit(20) \
             .execute()
 
-        data = response.data or []
-        # ✅ SEMPRE oggetto con chiave "recentlyPlayed"
-        return jsonify({"recentlyPlayed": data})
+        raw_data = response.data or []
+
+        # 🔄 Converto snake_case → camelCase
+        formatted = [
+            {
+                "id": r["id"],
+                "userId": r["user_id"],
+                "artist": r["artist"],
+                "album": r["album"],
+                "songFile": r["song_file"],
+                "timestamp": r["timestamp"]
+            }
+            for r in raw_data
+        ]
+
+        return jsonify({"recentlyPlayed": formatted})
     except Exception as e:
         print(f"❌ Errore recently-played: {e}")
         return jsonify({"recentlyPlayed": []}), 200
@@ -201,8 +214,11 @@ def playlist_personalizzata(user_id):
     if os.path.exists(path):
         return send_file(path, mimetype="application/json")
 
-    # ✅ Ritorna sempre oggetto coerente
-    return jsonify({"autoPlaylists": []})
+    # ✅ Risposta coerente col frontend
+    return jsonify({
+        "autoPlaylists": [],
+        "autoPlaylistsUpdatedAt": None
+    })
 
 @app.route("/generate/<user_id>")
 def generate_playlist_utente(user_id):
