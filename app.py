@@ -27,33 +27,59 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
-# ========================
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        h = resp.headers
+        origin = request.headers.get("Origin")
+        h["Access-Control-Allow-Origin"] = origin or "null"
+        h["Vary"] = "Origin"
+        h["Access-Control-Allow-Credentials"] = "true"
+        h["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        req_hdrs = request.headers.get("Access-Control-Request-Headers")
+        h["Access-Control-Allow-Headers"] = req_hdrs or "Content-Type, Authorization"
+        return resp
+
+@app.after_request
+def add_cors_headers(resp):
+    origin = request.headers.get("Origin")
+    if origin:
+        resp.headers.setdefault("Access-Control-Allow-Origin", origin)
+        resp.headers.setdefault("Vary", "Origin")
+        resp.headers.setdefault("Access-Control-Allow-Credentials", "true")
+    return resp
+
+## ========================
 # 🌍 CORS
 # ========================
-if os.environ.get("FLASK_ENV") == "development":
-    # In locale → accetta tutto
-    CORS(app,
-         resources={r"/*": {"origins": "*"}},
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+ENV = os.environ.get("FLASK_ENV", "development")
+
+ALLOWED_ORIGINS = [
+    "https://playlist-frontend.onrender.com",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://[::1]:8080",
+    "http://localhost:5173",
+    "null",  # Safari / file://
+]
+
+if ENV == "development":
+    CORS(
+        app,
+        resources={r"/*": {"origins": "*"}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
 else:
-    # In produzione → accetta solo frontend specifici
-    CORS(app,
-         resources={
-             r"/*": {
-                 "origins": [
-                     "https://playlist-frontend.onrender.com",
-                     "http://localhost:8080",
-                     "http://127.0.0.1:8080",
-                     "http://[::1]:8080",
-                     "null"  # Safari manda Origin:null
-                 ]
-             }
-         },
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    CORS(
+        app,
+        resources={r"/*": {"origins": ALLOWED_ORIGINS}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
 
 # ========================
 # 📂 Crea cartelle necessarie
@@ -75,13 +101,13 @@ def generate():
         return jsonify({"status": "✅ Playlist generate con successo", "count": len(playlist)})
     return jsonify({"error": "❌ Errore nella generazione playlist"}), 500
 
-@app.route("/playlists")
+@app.route("/playlists", methods=["GET", "OPTIONS"])
 def playlists():
     if os.path.exists("playlist_auto.json"):
         return send_file("playlist_auto.json", mimetype="application/json")
     return jsonify({"error": "File playlist_auto.json non trovato"}), 404
 
-@app.route("/songs")
+@app.route("/songs", methods=["GET", "OPTIONS"])
 def get_songs():
     if os.path.exists("songs_min2.json"):
         return send_file("songs_min2.json", mimetype="application/json")
@@ -122,7 +148,7 @@ def log_ascolto():
         return jsonify({"error": "❌ Errore salvataggio"}), 500
 
 
-@app.route("/recently-played/<user_id>")
+@app.route("/recently-played/<user_id>", methods=["GET", "OPTIONS"])
 def recently_played(user_id):
     try:
         response = supabase.table("listening_history") \
@@ -173,7 +199,7 @@ def add_recently_played(user_id):
         print(f"❌ Errore add_recently_played: {e}")
         return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
 
-@app.route("/playlists/<user_id>")
+@app.route("/playlists/<user_id>", methods=["GET", "OPTIONS"])
 def playlist_personalizzata(user_id):
     path = f"playlist_utenti/{user_id}.json"
     if os.path.exists(path):
@@ -297,7 +323,7 @@ def carica_cache(user_id, artist_name):
 
     return data.get("suggestions", [])
 
-@app.route("/debug/ascolti/<user_id>")
+@app.route("/debug/ascolti/<user_id>", methods=["GET", "OPTIONS"])
 def debug_ascolti(user_id):
     path = f"ascolti/{user_id}.json"
     if not os.path.exists(path):
@@ -307,7 +333,7 @@ def debug_ascolti(user_id):
         data = json.load(f)
     return jsonify(data)
 
-@app.route("/suggestions-by-artist/<user_id>")
+@app.route("/suggestions-by-artist/<user_id>", methods=["GET", "OPTIONS"])
 def suggerimenti_per_artista(user_id):
     suggestions_dir = f"suggestions_cache/{user_id}"
     suggerimenti = {}
@@ -501,12 +527,12 @@ def aggiorna_suggerimenti(user_id):
 
     return {"status": "✅ Suggerimenti aggiornati", "attivi": tutti[-5:]}
 
-@app.route("/debug/update_suggestions/<user_id>")
+@app.route("/debug/ascolti/<user_id>", methods=["GET", "OPTIONS"])
 def test_aggiorna(user_id):
     result = aggiorna_suggerimenti(user_id)
     return jsonify(result)
 
-@app.route("/suggested_albums/<user_id>")
+@app.route("/suggested_albums/<user_id>", methods=["GET", "OPTIONS"])
 def suggerisci_album(user_id):
     token = get_spotify_token()
     if not token:
@@ -571,7 +597,7 @@ def suggerisci_album(user_id):
 # 👤 Gestione utenti
 # ============================
 
-@app.route("/user/<user_id>", methods=["GET"])
+@app.route("/user/<user_id>", methods=["GET", "OPTIONS"])
 def get_user(user_id):
     """Recupera i dati utente da Supabase, oppure lo crea se non esiste"""
     try:
