@@ -725,51 +725,44 @@ def handle_error(e):
 @app.route("/register", methods=["POST"])
 def register():
     """Crea un nuovo account Supabase e inizializza la tabella users"""
-    data = request.json or {}
+    data = request.json
     email = data.get("email")
     password = data.get("password")
-    name = data.get("name", email.split("@")[0] if email else "Utente")
 
     if not email or not password:
         return jsonify({"error": "Email e password obbligatorie"}), 400
 
     try:
-        # ✅ Creazione account Supabase Auth (nuovo SDK)
         res = supabase.auth.sign_up({"email": email, "password": password})
 
-        # La risposta è un dict, non un oggetto
-        user = getattr(res, "user", None) or getattr(res, "user", None) or getattr(res, "user", None)
-        if not user and hasattr(res, "model_dump"):
-            user = res.model_dump().get("user")
+        # ✅ Se l'utente è già registrato
+        if "User already registered" in str(res):
+            return jsonify({"error": "Utente già registrato"}), 409
 
-        # Alcune versioni restituiscono user come dict
-        if not user:
-            try:
-                user = res.__dict__.get("user") or res.__dict__.get("data", {}).get("user")
-            except:
-                user = None
+        # ✅ Se la registrazione ha successo
+        if hasattr(res, "user") and res.user:
+            user_id = res.user.id
+            user_name = email.split("@")[0]
 
-        user_id = None
-        if user:
-            user_id = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+            supabase.table("users").upsert({
+                "id": user_id,
+                "name": user_name,
+                "playlists": [],
+                "likedSongs": [],
+                "searchHistory": [],
+                "suggestedAlbums": [],
+                "data": {"email": email, "name": user_name}
+            }).execute()
 
-        # 🔒 se ancora non abbiamo user_id, usiamo un fallback temporaneo
-        if not user_id:
-            print("⚠️ Impossibile estrarre user.id da Supabase response, fallback ID generico")
-            user_id = f"u_{int(time.time())}"
+            print(f"✅ Creato utente {user_name} ({user_id})")
+            return jsonify({"message": "✅ Account creato", "user_id": user_id}), 201
 
-        # ✅ Inserimento nella tabella users
-        supabase.table("users").upsert({
-            "id": user_id,
-            "data": {"email": email, "name": name, "playlists": [], "likedSongs": []}
-        }).execute()
-
-        print(f"✅ Utente creato: {email} → ID: {user_id}")
-        return jsonify({"message": "✅ Account creato", "user_id": user_id}), 201
+        return jsonify({"error": "Errore nella creazione dell’utente"}), 500
 
     except Exception as e:
+        if "User already registered" in str(e):
+            return jsonify({"error": "Utente già registrato"}), 409
         print("❌ Errore register:", e)
-        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -786,13 +779,32 @@ def login():
 
     try:
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        print("DEBUG → Risposta Supabase login:", res)
+
+        token = None
+
+        # ✅ Caso 1: oggetto con .session (vecchia versione)
         if hasattr(res, "session") and res.session:
             token = res.session.access_token
-            return jsonify({"message": "✅ Login effettuato", "token": token})
-        else:
-            return jsonify({"error": "Credenziali non valide"}), 401
+
+        # ✅ Caso 2: nuova struttura (res è un dict)
+        elif isinstance(res, dict):
+            token = res.get("session", {}).get("access_token")
+
+        # ✅ Caso 3: fallback (alcune versioni hanno direttamente res.access_token)
+        elif hasattr(res, "access_token"):
+            token = res.access_token
+
+        if token:
+            return jsonify({"message": "✅ Login effettuato", "token": token}), 200
+
+        # Se non arriva nessun token → credenziali errate
+        return jsonify({"error": "Credenziali non valide"}), 401
+
     except Exception as e:
         print("❌ Errore login:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/me", methods=["GET"])
