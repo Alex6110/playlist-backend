@@ -8,17 +8,42 @@ import random
 from supabase import create_client, Client
 from flask_cors import CORS
 import time
+import jwt
 
+# ✅ Forza modalità sviluppo
+os.environ["FLASK_ENV"] = "development"
+print("DEBUG → FLASK_ENV:", os.environ.get("FLASK_ENV"))
 
-# Carica variabili dal file .env solo in locale
-if os.environ.get("FLASK_ENV") == "development":
-    from dotenv import load_dotenv
-    load_dotenv()
+# ========================
+# 🌱 Carica variabili ambiente (.env)
+# ========================
+from dotenv import load_dotenv
+import pathlib
+
+# Percorso assoluto del file .env
+env_path = pathlib.Path(__file__).parent / ".env"
+
+print("DEBUG → Percorso previsto .env:", env_path)
+
+# Carica il file .env e mostra esito
+if load_dotenv(dotenv_path=env_path):
+    print("✅ File .env caricato correttamente da:", env_path)
+else:
+    print("⚠️ ATTENZIONE: impossibile caricare il file .env (controlla percorso e nome)")
+
+# Mostra valori per debug
+print("DEBUG SUPABASE_URL:", os.getenv("SUPABASE_URL"))
+print("DEBUG SUPABASE_KEY:", "✔️ Caricata" if os.getenv("SUPABASE_KEY") else "❌ Non trovata")
+
 # ========================
 # 🔑 Supabase
 # ========================
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+# 👀 Debug: mostra il valore esatto (inclusi caratteri invisibili)
+print("DEBUG → SUPABASE_URL (repr):", repr(SUPABASE_URL))
+print("DEBUG → Lunghezza KEY:", len(SUPABASE_KEY))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ========================
@@ -33,47 +58,55 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 # ========================
 app = Flask(__name__)
 
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        resp = app.make_default_options_response()
-        headers = resp.headers
 
-        headers["Access-Control-Allow-Origin"] = request.headers.get("Origin") or "*"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers", "Content-Type,Authorization")
-        headers["Access-Control-Allow-Credentials"] = "true"
-
-        return resp
 
 ## ========================
 # 🌍 CORS
 # =========================
-if os.environ.get("FLASK_ENV") == "development":
-    CORS(
-        app,
-        resources={r"/*": {"origins": [
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",   # <--- aggiungi questo
-            "http://[::1]:8080",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173"    # <--- e questo se usi vite
-        ]}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
-else:
-    CORS(
-        app,
-        resources={r"/*": {"origins": [
-            "https://playlist-frontend.onrender.com"
-        ]}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
 
+# ✅ Configura CORS correttamente per origini specifiche
+CORS(
+    app,
+    resources={r"/*": {"origins": [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "https://playlist-frontend.onrender.com"
+    ]}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Content-Type", "Authorization"],
+)
+
+# ✅ Forza gli header CORS anche dopo la risposta
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if origin in [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "https://playlist-frontend.onrender.com"
+    ]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+# ✅ Gestione preflight OPTIONS
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        origin = request.headers.get("Origin")
+        if origin in [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "https://playlist-frontend.onrender.com"
+        ]:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        return response, 200
 
 # ========================
 # 📂 Crea cartelle necessarie
@@ -145,31 +178,48 @@ def log_ascolto():
 
 @app.route("/recently-played/<user_id>", methods=["GET", "POST", "OPTIONS"])
 def recently_played(user_id):
+    """Gestisce ascolti recenti dell'utente: lettura (GET) o aggiunta (POST)"""
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
     try:
         if request.method == "POST":
-            data = request.json
-            song_file = data.get("songFile")
-            artist = data.get("artist")
-            album = data.get("album", "")
-            timestamp_str = data.get("timestamp")
+            data = request.json or {}
+            entry = {
+                "type": data.get("type"),
+                "name": data.get("name"),
+                "song_file": data.get("songFile"),
+                "artist": data.get("artist"),
+                "album": data.get("album", ""),
+                "timestamp": datetime.utcnow().isoformat()
+            }
 
-            if not song_file or not artist or not timestamp_str:
-                return jsonify({"error": "Dati incompleti"}), 400
+            # 🔹 Salva nel log di ascolto (tabella listening_history)
+            try:
+                supabase.table("listening_history").insert({
+                    "user_id": user_id,
+                    "artist": entry["artist"],
+                    "album": entry["album"],
+                    "song_file": entry["song_file"],
+                    "timestamp": entry["timestamp"]
+                }).execute()
+            except Exception as e:
+                print(f"⚠️ Errore salvataggio listening_history: {e}")
 
-            from dateutil import parser
-            timestamp = parser.isoparse(timestamp_str)
+            # 🔹 Aggiorna campo recentlyPlayed dell'utente
+            user_resp = supabase.table("users").select("data").eq("id", user_id).execute()
+            current_data = (user_resp.data[0].get("data") if user_resp.data else {}) or {}
 
-            supabase.table("listening_history").insert({
-                "user_id": user_id,
-                "artist": artist,
-                "album": album,
-                "song_file": song_file,
-                "timestamp": timestamp.isoformat()
-            }).execute()
+            recently_played = current_data.get("recentlyPlayed", [])
+            recently_played = [e for e in recently_played if e.get("name") != entry["name"]]
+            recently_played.insert(0, entry)
+            recently_played = recently_played[:8]
 
-            return jsonify({"status": "✅ Salvataggio effettuato"})
+            current_data["recentlyPlayed"] = recently_played
+            supabase.table("users").upsert({"id": user_id, "data": current_data}).execute()
 
-        # caso GET → ritorna gli ascolti recenti
+            return jsonify({"status": "✅ Aggiornato recentlyPlayed", "data": recently_played})
+
+        # 🔹 Metodo GET → restituisce ultimi ascolti recenti
         response = supabase.table("listening_history") \
             .select("*") \
             .eq("user_id", user_id) \
@@ -179,47 +229,15 @@ def recently_played(user_id):
         return jsonify(response.data or [])
 
     except Exception as e:
-        print(f"❌ Errore recently-played: {e}")
-        return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
+        print(f"❌ Errore recently_played: {e}")
+        return jsonify({"error": "Errore gestione recentlyPlayed"}), 500
 
-@app.route("/recently-played/<user_id>", methods=["POST"])
-def add_recently_played(user_id):
-    """Aggiunge un elemento alla lista recentlyPlayed di un utente"""
-    try:
-        data = request.json or {}
-        entry = {
-            "type": data.get("type"),
-            "name": data.get("name"),
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-        # Recupera il campo "data" dell'utente
-        user_resp = supabase.table("users").select("data").eq("id", user_id).execute()
-        if user_resp.data:
-            current_data = user_resp.data[0].get("data") or {}
-        else:
-            current_data = {}
-
-        recently_played = current_data.get("recentlyPlayed", [])
-
-        # Rimuove duplicati
-        recently_played = [e for e in recently_played if not (e["type"] == entry["type"] and e["name"] == entry["name"])]
-
-        # Inserisce in cima e limita a 8
-        recently_played.insert(0, entry)
-        recently_played = recently_played[:8]
-
-        # Aggiorna Supabase
-        current_data["recentlyPlayed"] = recently_played
-        supabase.table("users").update({"data": current_data}).eq("id", user_id).execute()
-
-        return jsonify({"status": "✅ Aggiornato recentlyPlayed", "data": recently_played})
-    except Exception as e:
-        print(f"❌ Errore add_recently_played: {e}")
-        return jsonify({"error": "Errore salvataggio recentlyPlayed"}), 500
 
 @app.route("/playlists/<user_id>", methods=["GET", "OPTIONS"])
 def playlist_personalizzata(user_id):
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
+
     try:
         path = f"playlist_utenti/{user_id}.json"
         if os.path.exists(path):
@@ -352,6 +370,8 @@ def carica_cache(user_id, artist_name):
 
 @app.route("/debug/ascolti/<user_id>", methods=["GET", "OPTIONS"])
 def debug_ascolti(user_id):
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
     path = f"ascolti/{user_id}.json"
     if not os.path.exists(path):
         return jsonify({"status": "❌ File non trovato"}), 404
@@ -362,6 +382,9 @@ def debug_ascolti(user_id):
 
 @app.route("/suggestions-by-artist/<user_id>", methods=["GET", "OPTIONS"])
 def suggerimenti_per_artista(user_id):
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
+
     suggestions_dir = f"suggestions_cache/{user_id}"
     suggerimenti = {}
     visti = set()
@@ -556,6 +579,8 @@ def aggiorna_suggerimenti(user_id):
 
 @app.route("/suggested_albums/<user_id>", methods=["GET", "OPTIONS"])
 def suggerisci_album(user_id):
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
     token = get_spotify_token()
     if not token:
         return jsonify({"error": "Token Spotify mancante"}), 500
@@ -622,13 +647,24 @@ def suggerisci_album(user_id):
 @app.route("/user/<user_id>", methods=["GET", "OPTIONS"])
 def get_user(user_id):
     """Recupera i dati utente da Supabase, oppure lo crea se non esiste"""
+
+    # ✅ Gestione CORS: intercetta subito le richieste OPTIONS
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+        return response, 200
+
     try:
         response = supabase.table("users").select("*").eq("id", user_id).execute()
-        if response.data:
+        print("DEBUG → Supabase response:", response)
+
+        if response.data and len(response.data) > 0:
             user = response.data[0]
             return jsonify(user.get("data", {}))
         else:
-            # Se non esiste lo creo con stato iniziale
+            print(f"⚠️ Utente {user_id} non trovato, lo creo...")
             new_user_data = {
                 "id": user_id,
                 "name": f"User_{user_id[:4]}",
@@ -645,14 +681,21 @@ def get_user(user_id):
                 "data": new_user_data
             }).execute()
             return jsonify(new_user_data)
+
     except Exception as e:
         print(f"❌ Errore get_user: {e}")
-        return jsonify({"error": "Errore nel recupero utente"}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/user/<user_id>", methods=["PUT", "OPTIONS"])
 def update_user(user_id):
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200  # 👈 Aggiunto
+
     """Aggiorna o crea i dati utente su Supabase"""
+    
     data_in = request.json or {}
 
     # 🔑 Assicuriamoci che ci sia un nome
@@ -670,5 +713,117 @@ def update_user(user_id):
     except Exception as e:
         print(f"❌ Errore update_user: {e}")
         return jsonify({"error": "Errore aggiornamento utente"}), 500
+@app.errorhandler(Exception)
+def handle_error(e):
+    print("🔥 ERRORE SERVER:", e)
+    return jsonify({"error": str(e)}), 500
+
+# ========================
+# 👤 AUTENTICAZIONE UTENTI
+# ========================
+
+@app.route("/register", methods=["POST"])
+def register():
+    """Crea un nuovo account Supabase e inizializza la tabella users"""
+    data = request.json or {}
+    email = data.get("email")
+    password = data.get("password")
+    name = data.get("name", email.split("@")[0] if email else "Utente")
+
+    if not email or not password:
+        return jsonify({"error": "Email e password obbligatorie"}), 400
+
+    try:
+        # ✅ Creazione account Supabase Auth (nuovo SDK)
+        res = supabase.auth.sign_up({"email": email, "password": password})
+
+        # La risposta è un dict, non un oggetto
+        user = getattr(res, "user", None) or getattr(res, "user", None) or getattr(res, "user", None)
+        if not user and hasattr(res, "model_dump"):
+            user = res.model_dump().get("user")
+
+        # Alcune versioni restituiscono user come dict
+        if not user:
+            try:
+                user = res.__dict__.get("user") or res.__dict__.get("data", {}).get("user")
+            except:
+                user = None
+
+        user_id = None
+        if user:
+            user_id = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+
+        # 🔒 se ancora non abbiamo user_id, usiamo un fallback temporaneo
+        if not user_id:
+            print("⚠️ Impossibile estrarre user.id da Supabase response, fallback ID generico")
+            user_id = f"u_{int(time.time())}"
+
+        # ✅ Inserimento nella tabella users
+        supabase.table("users").upsert({
+            "id": user_id,
+            "data": {"email": email, "name": name, "playlists": [], "likedSongs": []}
+        }).execute()
+
+        print(f"✅ Utente creato: {email} → ID: {user_id}")
+        return jsonify({"message": "✅ Account creato", "user_id": user_id}), 201
+
+    except Exception as e:
+        print("❌ Errore register:", e)
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    """Login utente e ritorna JWT"""
+    data = request.json
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"error": "Email e password obbligatorie"}), 400
+
+    try:
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if hasattr(res, "session") and res.session:
+            token = res.session.access_token
+            return jsonify({"message": "✅ Login effettuato", "token": token})
+        else:
+            return jsonify({"error": "Credenziali non valide"}), 401
+    except Exception as e:
+        print("❌ Errore login:", e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/me", methods=["GET"])
+def get_me():
+    """Ritorna le informazioni dell'utente autenticato"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Token mancante"}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        # verifica token (senza chiave privata, solo decode)
+        payload = jwt.decode(token, options={"verify_signature": False})
+        user_id = payload.get("sub")
+
+        res = supabase.table("users").select("*").eq("id", user_id).execute()
+        user = res.data[0] if res.data else None
+
+        if not user:
+            return jsonify({"error": "Utente non trovato"}), 404
+
+        return jsonify({"user": user}), 200
+
+    except Exception as e:
+        print("❌ Errore get_me:", e)
+        return jsonify({"error": str(e)}), 401
+        
+@app.route("/logout", methods=["POST"])
+def logout():
+    """Logout locale (frontend elimina token)"""
+    return jsonify({"message": "✅ Logout effettuato (token invalidato client-side)"}), 200
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5050, debug=True)
