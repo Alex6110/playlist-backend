@@ -826,4 +826,6 @@ def logout():
     return jsonify({"message": "✅ Logout effettuato (token invalidato client-side)"}), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5050, debug=True)
+    import os
+    port = int(os.environ.get("PORT", 10000))  # Render imposta PORT automaticamente
+    app.run(host="0.0.0.0", port=port, debug=True)
