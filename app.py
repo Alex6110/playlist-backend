@@ -728,6 +728,7 @@ def register():
     data = request.json
     email = data.get("email")
     password = data.get("password")
+    name = data.get("name")  # 👈 AGGIUNTO
 
     if not email or not password:
         return jsonify({"error": "Email e password obbligatorie"}), 400
@@ -742,8 +743,11 @@ def register():
         # ✅ Se la registrazione ha successo
         if hasattr(res, "user") and res.user:
             user_id = res.user.id
-            user_name = email.split("@")[0]
 
+            # 👇 Usa il nome fornito o fallback alla parte prima della @
+            user_name = name if name else email.split("@")[0]
+
+            # ✅ Salva il record nella tabella "users"
             supabase.table("users").upsert({
                 "id": user_id,
                 "name": user_name,
@@ -751,11 +755,18 @@ def register():
                 "likedSongs": [],
                 "searchHistory": [],
                 "suggestedAlbums": [],
-                "data": {"email": email, "name": user_name}
+                "data": {
+                    "email": email,
+                    "name": user_name
+                }
             }).execute()
 
             print(f"✅ Creato utente {user_name} ({user_id})")
-            return jsonify({"message": "✅ Account creato", "user_id": user_id}), 201
+            return jsonify({
+                "message": "✅ Account creato",
+                "user_id": user_id,
+                "name": user_name
+            }), 201
 
         return jsonify({"error": "Errore nella creazione dell’utente"}), 500
 
